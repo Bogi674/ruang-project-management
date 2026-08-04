@@ -51,6 +51,20 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
+    // Add creator as owner so they can access and edit the project.
+    // Role must be "owner" | "editor" | "viewer" — checkProjectAccess in
+    // api-helpers.ts uses indexOf() on that array, so any other string
+    // (e.g. "admin") would silently block all permission checks.
+    const { error: memberError } = await db
+      .from("project_members")
+      .insert({
+        project_id: data.id,
+        user_id: session.user.id,
+        role: "owner",
+      });
+
+    if (memberError) throw memberError;
+
     return NextResponse.json(data, { status: 201 });
   } catch {
     return unauthorized();
