@@ -92,7 +92,7 @@ export default function QuickCapture({ defaultProjectId, onCreated }: QuickCaptu
               placeholder="Title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              onKeyDown={(e) => e.key === "Enter" && !saving && handleSubmit()}
             />
 
             <div className="grid grid-cols-2 gap-3">

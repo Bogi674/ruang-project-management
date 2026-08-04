@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Plus, ChevronDown, ChevronRight, Settings, Loader2, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export default function ProjectPage() {
   const [showAddEntry, setShowAddEntry] = useState<string | null>(null); // workstreamId
   const [addEntryType, setAddEntryType] = useState<EntryType>("note");
   const [addEntryTitle, setAddEntryTitle] = useState("");
+  const submittingEntry = useRef(false); // prevents double-submit on fast Enter/click
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -66,22 +67,32 @@ export default function ProjectPage() {
   };
 
   const createEntry = async (workstreamId: string) => {
-    if (!addEntryTitle.trim()) return;
-    const res = await fetch("/api/entries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: id,
-        workstreamId,
-        type: addEntryType,
-        content: { title: addEntryTitle.trim() },
-      }),
-    });
-    if (res.ok) {
-      const entry = await res.json();
-      setEntries((prev) => [entry, ...prev]);
-      setShowAddEntry(null);
-      setAddEntryTitle("");
+    const title = addEntryTitle.trim();
+    if (!title || submittingEntry.current) return;
+    submittingEntry.current = true;
+
+    // Close and clear immediately so the UI is responsive and a second
+    // Enter/click has nothing to act on while the fetch is in-flight.
+    setShowAddEntry(null);
+    setAddEntryTitle("");
+
+    try {
+      const res = await fetch("/api/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: id,
+          workstreamId,
+          type: addEntryType,
+          content: { title },
+        }),
+      });
+      if (res.ok) {
+        const entry = await res.json();
+        setEntries((prev) => [entry, ...prev]);
+      }
+    } finally {
+      submittingEntry.current = false;
     }
   };
 
