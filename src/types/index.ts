@@ -34,7 +34,6 @@ export interface Workstream {
   description: string | null;
   color: string;
   sort_order: number;
-  created_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -100,10 +99,13 @@ export interface LinkContent {
 export interface FileRecord {
   id: string;
   entry_id: string;
+  project_id: string;
+  uploaded_by: string;
   filename: string;
-  size: number;
+  size_bytes: number;
   mime_type: string;
-  storage_path: string;
+  r2_object_key: string;
+  r2_bucket: string;
   created_at: string;
 }
 
@@ -130,10 +132,11 @@ export interface Invitation {
 
 export interface Notification {
   id: string;
-  user_id: string;
+  recipient_id: string;
+  actor_id: string | null;
+  entry_id: string | null;
   type: string;
   message: string;
-  read: boolean;
-  link: string | null;
+  is_read: boolean;
   created_at: string;
 }

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         workstream:workstreams(id, name, color),
         creator:users!entries_created_by_fkey(id, name, avatar_url),
         assignees:entry_assignees(user:users(id, name, avatar_url)),
-        files(id, filename, size, mime_type, storage_path)
+        files(id, filename, size_bytes, mime_type, r2_object_key)
       `)
       .order("pinned_date", { ascending: false, nullsFirst: true })
       .order("created_at", { ascending: false })
@@ -104,9 +104,9 @@ export async function POST(req: NextRequest) {
     if (type === "note" && data) {
       await db.from("note_versions").insert({
         entry_id: data.id,
-        version_num: 1,
-        content: defaultContent,
-        created_by: session.user.id,
+        version_number: 1,
+        content_snapshot: defaultContent,
+        saved_by: session.user.id,
       });
     }
 

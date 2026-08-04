@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
         description: description?.trim() || null,
         color: color || "#8b5cf6",
         sort_order: count || 0,
-        created_by: session.user.id,
       })
       .select()
       .single();

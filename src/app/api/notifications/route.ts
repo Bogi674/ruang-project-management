@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
     let query = db
       .from("notifications")
       .select("*")
-      .eq("user_id", session.user.id)
+      .eq("recipient_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (unreadOnly) query = query.eq("read", false);
+    if (unreadOnly) query = query.eq("is_read", false);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -31,9 +31,9 @@ export async function PATCH(req: NextRequest) {
     if (markAllRead) {
       await db
         .from("notifications")
-        .update({ read: true })
-        .eq("user_id", session.user.id)
-        .eq("read", false);
+        .update({ is_read: true })
+        .eq("recipient_id", session.user.id)
+        .eq("is_read", false);
     }
 
     return NextResponse.json({ ok: true });

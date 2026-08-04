@@ -18,7 +18,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const role = await checkProjectAccess(db, projectId, session.user.id, "editor");
     if (!role) return notFound("File not found");
 
-    await deleteFromR2(file.storage_path);
+    await deleteFromR2(file.r2_object_key);
     await db.from("files").delete().eq("id", params.id);
 
     return new NextResponse(null, { status: 204 });
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const role = await checkProjectAccess(db, projectId, session.user.id);
     if (!role) return notFound("File not found");
 
-    const url = getR2PublicUrl(file.storage_path);
+    const url = getR2PublicUrl(file.r2_object_key);
 
     return NextResponse.json({ url, file });
   } catch {

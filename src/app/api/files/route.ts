@@ -32,10 +32,13 @@ export async function POST(req: NextRequest) {
       .from("files")
       .insert({
         entry_id: entryId,
+        project_id: entry.project_id,
+        uploaded_by: session.user.id,
         filename: file.name,
-        size: file.size,
+        size_bytes: file.size,
         mime_type: file.type,
-        storage_path: storagePath,
+        r2_object_key: storagePath,
+        r2_bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
       })
       .select()
       .single();

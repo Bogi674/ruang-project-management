@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         workstream:workstreams(id, name, color),
         creator:users!entries_created_by_fkey(id, name, avatar_url),
         assignees:entry_assignees(user:users(id, name, avatar_url)),
-        files(id, filename, size, mime_type, storage_path, created_at)
+        files(id, filename, size_bytes, mime_type, r2_object_key, created_at)
       `)
       .eq("id", params.id)
       .single();
@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         workstream:workstreams(id, name, color),
         creator:users!entries_created_by_fkey(id, name, avatar_url),
         assignees:entry_assignees(user:users(id, name, avatar_url)),
-        files(id, filename, size, mime_type, storage_path, created_at)
+        files(id, filename, size_bytes, mime_type, r2_object_key, created_at)
       `)
       .single();
 
@@ -78,9 +78,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const versionNum = (newContent?.version_number || 1);
       await db.from("note_versions").insert({
         entry_id: params.id,
-        version_num: versionNum,
-        content: updates.content,
-        created_by: session.user.id,
+        version_number: versionNum,
+        content_snapshot: updates.content,
+        saved_by: session.user.id,
       });
       // Keep only last 20
       const { data: versions } = await db
