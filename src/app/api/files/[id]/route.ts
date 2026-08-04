@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorized, notFound, checkProjectAccess } from "@/lib/api-helpers";
-import { createServiceClient } from "@/lib/supabase";
+import { deleteFromR2, getR2PublicUrl } from "@/lib/r2";
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -18,8 +18,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const role = await checkProjectAccess(db, projectId, session.user.id, "editor");
     if (!role) return notFound("File not found");
 
-    const adminDb = createServiceClient();
-    await adminDb.storage.from("ruang-files").remove([file.storage_path]);
+    await deleteFromR2(file.storage_path);
     await db.from("files").delete().eq("id", params.id);
 
     return new NextResponse(null, { status: 204 });
@@ -44,12 +43,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const role = await checkProjectAccess(db, projectId, session.user.id);
     if (!role) return notFound("File not found");
 
-    const adminDb = createServiceClient();
-    const { data } = adminDb.storage
-      .from("ruang-files")
-      .getPublicUrl(file.storage_path);
+    const url = getR2PublicUrl(file.storage_path);
 
-    return NextResponse.json({ url: data.publicUrl, file });
+    return NextResponse.json({ url, file });
   } catch {
     return unauthorized();
   }

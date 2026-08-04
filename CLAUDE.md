@@ -25,8 +25,8 @@ Closest reference product: Agenda.app -- this is the team version of that idea w
 |---|---|---|
 | Frontend | Next.js 14 (App Router) | SSR, API routes, file handling |
 | Auth | NextAuth.js + Google OAuth | Remember-me toggle + session config |
-| Database | Supabase (PostgreSQL) | Auth, storage, and DB in one |
-| File storage | Supabase Storage | Integrated permissions |
+| Database | Supabase (PostgreSQL) | Already provisioned externally -- DB + Auth only, no Storage |
+| File storage | Cloudflare R2 | S3-compatible; AWS SDK v3; env: CLOUDFLARE_R2_* |
 | RTE | TipTap | Notion-like, extensible |
 | Email | Resend | Reminder delivery |
 | Deployment | Vercel | Zero-config |

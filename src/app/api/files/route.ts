@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorized, badRequest, checkProjectAccess } from "@/lib/api-helpers";
-import { createServiceClient } from "@/lib/supabase";
+import { uploadToR2 } from "@/lib/r2";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
     if (!file || !entryId) return badRequest("file and entryId required");
     if (file.size > 20 * 1024 * 1024) return badRequest("File must be under 20MB");
 
-    // Verify entry access
     const { data: entry } = await db
       .from("entries")
       .select("project_id")
@@ -27,15 +26,7 @@ export async function POST(req: NextRequest) {
     const storagePath = `entries/${entryId}/${Date.now()}-${file.name}`;
     const arrayBuffer = await file.arrayBuffer();
 
-    const adminDb = createServiceClient();
-    const { error: uploadError } = await adminDb.storage
-      .from("ruang-files")
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false,
-      });
-
-    if (uploadError) throw uploadError;
+    await uploadToR2(storagePath, arrayBuffer, file.type);
 
     const { data: fileRecord, error: dbError } = await db
       .from("files")
