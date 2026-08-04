@@ -225,7 +225,7 @@ export default function EntryPanel({ entryId, onClose, onUpdate, onDelete }: Ent
                   <div key={file.id} className="flex items-center gap-2 p-2 rounded border border-border text-sm">
                     <span className="flex-1 truncate text-xs">{file.filename}</span>
                     <span className="text-xs text-muted-foreground">
-                      {(file.size / 1024).toFixed(1)}KB
+                      {(file.size_bytes / 1024).toFixed(1)}KB
                     </span>
                     <button
                       onClick={() => deleteFile(file.id)}
