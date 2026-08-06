@@ -1,21 +1,22 @@
-# Ruang — Project Context for Claude Code
+# Ruang v1.0 — Claude Code Context File
 
-> This file is read automatically at every Claude Code session start.
-> It reflects the CURRENT state of the codebase as of Phase 1 completion (Aug 2026).
-> Full DB schema: `ruang_mvp_schema.sql` | Full table reference: `Ruang_database_structure.md`
+> Read this at the start of every session. This is the source of truth for architecture,
+> design decisions, and critical rules. Visual source of truth: `Ruang_Prototype_dc.html`
+> (desktop) and `Ruang_Mobile_dc.html` (mobile). When in doubt, match the prototype exactly.
 
 ---
 
 ## What This Is
 
-Project management app positioned between Notion (flexible content) and a lightweight PM tool
-(project structure, reminders, team access). Core differentiator: project-scoped journal where
-everything is anchored to a project, a date, or both. Closest reference: Agenda.app — this is
-the team version with full PM structure.
+**Ruang** (Indonesian for "space" or "room") is a note-first personal workspace web app.
 
-- Personal use first, architected to be sellable later (multi-team, multi-workspace)
-- Desktop-first. Mobile via PWA wrapper (next-pwa) — no separate native app
-- App name: **Ruang** (Indonesian for "space/room") — working name, not yet confirmed
+**Core promise:** Open the app, start writing. Nothing mandatory. Organize when you feel like it.
+
+**Previous version deprecated.** The old project-management version (Platform > Project > Workstream > Entry)
+is fully deprecated. This is a clean rebuild with a fundamentally different architecture.
+Do not reference old schema, old routes, or old component structure.
+
+**Target platform:** Desktop-first (min 1024px). PWA-installable on mobile (390px target).
 
 ---
 
@@ -23,424 +24,131 @@ the team version with full PM structure.
 
 | Layer | Tool | Notes |
 |---|---|---|
-| Frontend | Next.js 14 (App Router) | SSR, API routes, file handling |
-| Auth | NextAuth.js + Google OAuth | Remember-me toggle + session config |
-| Database | Supabase (PostgreSQL) | Auth and DB only — NOT used for file storage |
-| File storage | Cloudflare R2 | S3-compatible; presigned URLs for upload/download |
-| RTE | TipTap | Notion-like, extensible |
-| Email | Resend | Reminder delivery |
+| Frontend | Next.js 14 (App Router) | SSR, API routes, TypeScript |
+| Auth | NextAuth.js + Google OAuth | Email/password + Google OAuth |
+| Database | Supabase (PostgreSQL) | DB and auth ONLY — never file storage |
+| File storage | Cloudflare R2 | All file bytes. S3-compatible, presigned URLs |
+| RTE | TipTap | Block-based editor with slash commands |
+| Email | Resend | Reminder delivery (Phase 2) |
 | Deployment | Vercel | Zero-config |
-| Scheduling | Vercel Cron (or BullMQ) | Reminder delivery jobs |
-| Timeline Board | Custom CSS grid | Frozen left panel + scrollable date cols — NOT FullCalendar |
-| Calendar toggle | FullCalendar.js | Traditional calendar view only |
-| Drag to reschedule | dnd-kit | Horizontal drag across date columns |
-| UI | Tailwind + shadcn/ui | |
-| PWA | next-pwa | Mobile installable wrapper |
+| UI | Tailwind CSS + shadcn/ui | |
+| PWA | next-pwa | Mobile installable |
+
+**Repo:** `github.com/Bogi674/ruang-project-management`, branch `main`
+**Deployment:** `ruang-project-management.vercel.app`
 
 ---
 
-## Data Hierarchy
+## Design Philosophy
 
+1. **Speed before structure.** Capture takes zero decisions. Organization is always optional and always post-capture.
+2. **The desk metaphor.** Your Ruang is your desk. It reflects how you work.
+3. **Calm, not cluttered.** UI surfaces only what is needed at that moment.
+4. **ADHD-friendly without being patronizing.** No popups. No mandatory fields. No "are you sure?" dialogs. Always autosaving.
+5. **Expression is a feature.** Deep personalization without it feeling like a settings page.
+
+**Aesthetic:** Clean, editorial, calm. Generous whitespace. Closer to a well-designed notebook than a SaaS dashboard.
+
+---
+
+## Data Model
+
+```sql
+users
+  id, email, name, avatar_url,
+  accent_color, typography_preference, surface_preference,
+  density_preference, landing_page_preference, theme_preference,
+  created_at
+
+spaces
+  id, name, color, icon (emoji), owner_id,
+  parent_id (nullable -- null = top-level space),
+  path (materialized text, e.g. "work/design/ui-research"),
+  depth (0-2, max 3 levels enforced in DB and UI),
+  is_shared, created_at
+
+notes
+  id, user_id,
+  type (note | checklist),
+  title (auto-derived from first line of content -- never set by user),
+  content (TipTap JSON),
+  space_id (nullable -- null = lives in My Storeroom),
+  tags (jsonb array),
+  pinned_date (date, nullable),
+  pinned_date_end (date, nullable),
+  is_pinned_to_home (bool),
+  is_public (bool, Phase 3 only),
+  published_at (nullable, Phase 3 only),
+  created_at, updated_at
+
+widgets
+  id, user_id,
+  note_id (nullable -- null = standalone widget),
+  type (reminder | file | link),
+  content (jsonb -- shape varies by widget type),
+  created_at
+
+files
+  id, widget_id, uploaded_by, filename,
+  r2_object_key, r2_bucket, mime_type, size_bytes, created_at
+
+reminder_deliveries
+  id, widget_id, recipient_id, channel, status,
+  scheduled_at, sent_at, error_message
+
+notifications
+  id, recipient_id, actor_id, type, message, is_read, created_at
 ```
-Platform
-└── Project
-    └── Workstream
-        └── Entry (polymorphic)
-            ├── note
-            ├── file
-            ├── task
-            ├── reminder
-            └── link
+
+### Widget content shapes (jsonb)
+
+**Reminder:**
+```json
+{
+  "title": "",
+  "date": null,
+  "time": null,
+  "recurrence": "once",
+  "type_label": "Deadline | Follow-up | Meeting | Review"
+}
+```
+
+**File:**
+```json
+{ "description": "" }
+```
+(Actual file stored in R2. Metadata in `files` table linked via `widget_id`.)
+
+**Link:**
+```json
+{
+  "url": "",
+  "og_title": "",
+  "og_description": "",
+  "og_image": null,
+  "note": ""
+}
 ```
 
 ---
 
 ## Critical Rules — Read Before Writing Any Code
 
-### 1. project_members must be created alongside every new project
+### 1. Supabase is DB and auth ONLY — never file storage
 
-When inserting a new project, ALWAYS immediately insert the creator into `project_members`
-with role `"owner"`. Without this row, `checkProjectAccess()` returns null and the project
-becomes completely inaccessible — the creator cannot read, edit, or even see their own project.
+All file bytes go to Cloudflare R2. Never call `supabase.storage`.
 
-```ts
-// After inserting into projects:
-await db.from("project_members").insert({
-  project_id: data.id,
-  user_id: session.user.id,
-  role: "owner",        // must be exactly "owner" | "editor" | "viewer"
-});
-```
-
-### 2. Role strings are strict — no "admin"
-
-`checkProjectAccess()` in `src/lib/api-helpers.ts` validates roles using:
-```ts
-const roles = ["viewer", "editor", "owner"];
-roles.indexOf(data.role) >= roles.indexOf(minRole)
-```
-Using any other string (e.g. `"admin"`) results in `indexOf()` returning -1, which silently
-blocks ALL permission checks — including read access. Valid values: `"viewer"` `"editor"` `"owner"`.
-
-### 3. workstreams table has NO created_by column
-
-The `workstreams` table does not have a `created_by` column. Do not insert it. Only `projects`
-and `entries` tables have `created_by`.
-
-### 4. Supabase storage is NOT used — all files go to Cloudflare R2
-
-Never use `supabase.storage`. File upload flow:
-1. Client uploads file to R2 via presigned PUT URL from `/api/files/upload-url`
-2. Client saves metadata to `files` table via `/api/files` POST
-3. Client gets file URL via presigned GET from `/api/files/[id]`
-
-R2 lib is at `src/lib/r2.ts`. Functions: `uploadToR2`, `deleteFromR2`, `getR2PublicUrl`, `getR2SignedUrl`.
-
----
-
-## Database Column Names — Verified Correct
-
-These were the source of multiple bugs. Column names below are confirmed against
-`ruang_mvp_schema.sql` and all API routes have been fixed to match.
-
-### `files` table
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `public_id` | text | |
-| `entry_id` | uuid | FK → entries |
-| `project_id` | uuid | FK → projects (stored directly for ZIP queries) |
-| `uploaded_by` | uuid | FK → users |
-| `filename` | text | |
-| `r2_object_key` | text | The R2 object key / path — NOT `storage_path` |
-| `r2_bucket` | text | R2 bucket name |
-| `mime_type` | text | |
-| `size_bytes` | bigint | File size — NOT `size` |
-| `description` | text | |
-| `created_at` | timestamptz | |
-
-**Common mistakes to avoid:**
-- `size` does NOT exist → use `size_bytes`
-- `storage_path` does NOT exist → use `r2_object_key`
-
-### `note_versions` table
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `public_id` | text | |
-| `entry_id` | uuid | FK → entries |
-| `saved_by` | uuid | FK → users — NOT `created_by` |
-| `content_snapshot` | jsonb | Full content at this version — NOT `content` |
-| `version_number` | int4 | NOT `version_num` |
-| `created_at` | timestamptz | |
-
-**Common mistakes to avoid:**
-- `created_by` does NOT exist → use `saved_by`
-- `content` does NOT exist → use `content_snapshot`
-- `version_num` does NOT exist → use `version_number`
-
-### `notifications` table
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `public_id` | text | |
-| `recipient_id` | uuid | FK → users — NOT `user_id` |
-| `actor_id` | uuid | FK → users (who triggered it) |
-| `entry_id` | uuid | FK → entries |
-| `type` | text | |
-| `message` | text | |
-| `is_read` | bool | NOT `read` |
-| `created_at` | timestamptz | |
-
-**Common mistakes to avoid:**
-- `user_id` does NOT exist → use `recipient_id`
-- `read` does NOT exist → use `is_read`
-- `link` does NOT exist (no link column on notifications)
-
-### `workstreams` table
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `public_id` | text | |
-| `project_id` | uuid | FK → projects |
-| `name` | text | |
-| `color` | text | |
-| `sort_order` | int4 | |
-| `description` | text | |
-| `is_collapsed` | bool | |
-| `created_at` | timestamptz | |
-| `updated_at` | timestamptz | |
-
-**Note:** NO `created_by` column on workstreams.
-
----
-
-## API Routes — Current Structure
-
-All routes live under `src/app/api/`. All use `requireAuth()` and `checkProjectAccess()` from
-`src/lib/api-helpers.ts`. The service client bypasses RLS — permission checks are done manually
-in every route handler.
-
-### Projects
-
-| Method | Route | Min role | Notes |
-|---|---|---|---|
-| GET | `/api/projects` | — | Lists projects via project_members join |
-| POST | `/api/projects` | — | Creates project + inserts creator as owner in project_members |
-| GET | `/api/projects/[id]` | viewer | Uses internal `id` UUID for lookup |
-| PATCH | `/api/projects/[id]` | editor | Allows owner + editor |
-| DELETE | `/api/projects/[id]` | owner | |
-| GET | `/api/projects/[id]/members` | viewer | |
-| POST | `/api/projects/[id]/members` | owner | Adds member or creates invitation |
-| DELETE | `/api/projects/[id]/members` | owner | |
-
-### Workstreams
-
-| Method | Route | Min role | Notes |
-|---|---|---|---|
-| GET | `/api/workstreams?projectId=` | viewer | |
-| POST | `/api/workstreams` | editor | Body: `{ projectId, name, description, color }` |
-| GET | `/api/workstreams/[id]` | viewer | |
-| PATCH | `/api/workstreams/[id]` | editor | Allowed fields: name, description, color, sort_order |
-| DELETE | `/api/workstreams/[id]` | editor | |
-
-### Entries
-
-| Method | Route | Min role | Notes |
-|---|---|---|---|
-| GET | `/api/entries?projectId=&workstreamId=&type=&today=&limit=&offset=` | viewer | Returns with joined project, workstream, creator, assignees, files |
-| POST | `/api/entries` | editor | Body: `{ projectId, workstreamId, type, content, pinnedDate, pinnedDateEnd, tags }` |
-| GET | `/api/entries/[id]` | viewer | |
-| PATCH | `/api/entries/[id]` | editor | Merges content; saves note_version on note content change |
-| DELETE | `/api/entries/[id]` | editor | |
-
-Entry POST body notes:
-- `projectId` + `workstreamId` + `type` are required
-- `content` is optional — route calls `getDefaultContent(type, content)` to merge with defaults
-- The select in both GET and PATCH uses: `files(id, filename, size_bytes, mime_type, r2_object_key, created_at)`
-
-### Files
-
-| Method | Route | Min role | Notes |
-|---|---|---|---|
-| POST | `/api/files` | editor | multipart/form-data with `file` + `entryId` |
-| GET | `/api/files/[id]` | viewer | Returns presigned R2 URL |
-| DELETE | `/api/files/[id]` | editor | Deletes from R2 + DB |
-
-File POST inserts: `entry_id`, `project_id`, `uploaded_by`, `filename`, `size_bytes`, `mime_type`,
-`r2_object_key`, `r2_bucket`. References `entry.project_id` fetched from DB.
-
-### Notifications
-
-| Method | Route | Min role | Notes |
-|---|---|---|---|
-| GET | `/api/notifications?unread=true` | — | Filters by `recipient_id`; unread uses `is_read = false` |
-| PATCH | `/api/notifications` | — | Body: `{ markAllRead: true }` sets `is_read = true` |
-
-### Auth + Users
-
-| Method | Route | Notes |
-|---|---|---|
-| ALL | `/api/auth/[...nextauth]` | NextAuth handler |
-| GET + PATCH | `/api/users` | Current user profile |
-
----
-
-## Permission System
-
-`checkProjectAccess(db, projectId, userId, minRole)` in `src/lib/api-helpers.ts`:
-
-```ts
-const roles = ["viewer", "editor", "owner"];
-if (roles.indexOf(data.role) < roles.indexOf(minRole)) return null;
-```
-
-- Returns the user's role string on success, `null` on failure
-- Default `minRole` is `"viewer"` if not specified
-- `minRole = "editor"` allows both `"editor"` AND `"owner"`
-- `minRole = "owner"` allows only `"owner"`
-- Any role string not in the array (e.g. "admin") returns index -1 → always blocked
-
----
-
-## TypeScript Types (src/types/index.ts)
-
-Key interfaces — these match the actual DB schema:
-
-```ts
-type ProjectMemberRole = "owner" | "editor" | "viewer";
-
-interface FileRecord {
-  id: string;
-  entry_id: string;
-  project_id: string;
-  uploaded_by: string;
-  filename: string;
-  size_bytes: number;      // NOT size
-  mime_type: string;
-  r2_object_key: string;  // NOT storage_path
-  r2_bucket: string;
-  created_at: string;
-}
-
-interface Workstream {
-  id: string;
-  public_id: string;
-  project_id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  sort_order: number;
-  // NO created_by
-  created_at: string;
-  updated_at: string;
-}
-
-interface Notification {
-  id: string;
-  recipient_id: string;   // NOT user_id
-  actor_id: string | null;
-  entry_id: string | null;
-  type: string;
-  message: string;
-  is_read: boolean;       // NOT read
-  created_at: string;
-  // NO link column
-}
-```
-
----
-
-## Entry Types
-
-### Shared fields on every entry
-
-```
-id, public_id, type, project_id, workstream_id, created_by,
-pinned_date (date), pinned_date_end (date), tags (jsonb array),
-content (jsonb), is_pinned, created_at, updated_at
-```
-
-### Content shapes by type
-
-**note**
-```json
-{ "title": "", "tiptap_json": {}, "is_locked": false, "version_number": 1 }
-```
-Initial note version saved to `note_versions` on POST:
-`{ entry_id, version_number: 1, content_snapshot: <content>, saved_by: userId }`
-Subsequent saves on PATCH also write to `note_versions`. Keep last 20.
-
-**task**
-```json
-{ "title": "", "status": "todo", "due_date": null }
-```
-Status values: `todo` | `in_progress` | `blocked` | `done`
-
-**file**
-```json
-{ "title": "", "description": "" }
-```
-Actual file metadata in `files` table (linked via `entry_id`).
-
-**reminder**
-```json
-{
-  "title": "",
-  "type_label": "deadline",
-  "schedule_type": "one_time",
-  "scheduled_at": null,
-  "recurrence": null,
-  "audience_type": "just_me",
-  "recipient_ids": []
-}
-```
-`type_label`: `deadline` | `follow_up` | `meeting` | `review`
-`schedule_type`: `one_time` | `recurring`
-`audience_type`: `just_me` | `all_members` | `specific`
-
-**link**
-```json
-{ "url": "", "title": "", "og_image": null, "og_description": null, "notes": "" }
-```
-
----
-
-## File Structure
-
-```
-src/
-├── app/
-│   ├── (app)/
-│   │   ├── layout.tsx              — app shell wrapper
-│   │   ├── today/page.tsx          — Today View (default home)
-│   │   └── projects/
-│   │       ├── page.tsx            — All Projects list
-│   │       └── [id]/
-│   │           ├── page.tsx        — Project detail (List View)
-│   │           └── settings/page.tsx
-│   ├── api/
-│   │   ├── auth/[...nextauth]/     — NextAuth handler
-│   │   ├── projects/
-│   │   │   ├── route.ts            — GET list, POST create (+ project_members insert)
-│   │   │   └── [id]/
-│   │   │       ├── route.ts        — GET, PATCH, DELETE
-│   │   │       └── members/route.ts
-│   │   ├── workstreams/
-│   │   │   ├── route.ts            — GET list, POST create (no created_by)
-│   │   │   └── [id]/route.ts
-│   │   ├── entries/
-│   │   │   ├── route.ts            — GET list, POST create
-│   │   │   └── [id]/route.ts       — GET, PATCH (saves note_versions), DELETE
-│   │   ├── files/
-│   │   │   ├── route.ts            — POST upload to R2 + save metadata
-│   │   │   └── [id]/route.ts       — GET presigned URL, DELETE from R2 + DB
-│   │   ├── notifications/route.ts  — GET (recipient_id, is_read), PATCH (markAllRead)
-│   │   └── users/route.ts
-│   ├── auth/signin/page.tsx
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── providers.tsx
-├── components/
-│   ├── editors/TipTapEditor.tsx
-│   ├── entries/
-│   │   ├── EntryCard.tsx
-│   │   ├── EntryPanel.tsx          — uses file.size_bytes (not file.size)
-│   │   ├── EntryTypeIcon.tsx
-│   │   ├── QuickCapture.tsx
-│   │   └── StatusPill.tsx
-│   ├── layout/AppShell.tsx
-│   ├── projects/ProjectForm.tsx
-│   ├── workstreams/WorkstreamForm.tsx
-│   └── ui/                         — shadcn/ui components
-├── lib/
-│   ├── api-helpers.ts              — requireAuth, checkProjectAccess, error helpers
-│   ├── auth.ts                     — NextAuth config
-│   ├── r2.ts                       — uploadToR2, deleteFromR2, getR2PublicUrl, getR2SignedUrl
-│   ├── supabase.ts                 — createServiceClient (bypasses RLS)
-│   └── utils.ts
-└── types/index.ts                  — All TypeScript interfaces
-```
-
----
-
-## Cloudflare R2 Integration
-
-File upload flow (presigned URL pattern):
+File upload pattern:
 1. Client requests presigned PUT URL from `/api/files/upload-url`
-2. Client uploads directly to R2 — no file data through Next.js server
-3. Client saves metadata to `files` table via `/api/files` POST
+2. Client uploads file directly to R2 (no bytes through Next.js server)
+3. Client saves metadata to `files` table via POST `/api/files`
 
-File read flow:
+File read pattern:
 1. Client calls `/api/files/[id]` GET
-2. Route verifies access, generates presigned GET URL
-3. Client uses URL for inline preview or download
+2. Route verifies ownership, generates presigned GET URL
+3. Client uses URL for preview or download
 
-R2 env vars required:
+R2 env vars:
 ```
 CLOUDFLARE_ACCOUNT_ID=
 CLOUDFLARE_R2_ACCESS_KEY_ID=
@@ -448,115 +156,490 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY=
 CLOUDFLARE_R2_BUCKET_NAME=
 CLOUDFLARE_R2_PUBLIC_URL=
 ```
-SDK: `@aws-sdk/client-s3` with endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
-Never use Supabase storage client anywhere in this project.
+
+### 2. Note titles are never user-entered
+
+The `title` column on `notes` is auto-derived from the first line of `content` (TipTap JSON).
+There is no title field in the UI. The editor opens with a blank cursor. First line = title.
+Sync the derived title to the DB on each autosave.
+
+### 3. Spaces have a maximum depth of 3 levels (depth 0, 1, 2)
+
+- `depth: 0` = top-level space (no parent)
+- `depth: 1` = child of a top-level space
+- `depth: 2` = grandchild (maximum allowed depth)
+
+Enforce this in both DB constraint and UI (hide "New sub-space" option at depth 2).
+The `path` column is a materialized text path, e.g. `"work/design/ui-research"`.
+
+### 4. A note with no space_id lives in My Storeroom
+
+Never auto-assign a space. `space_id = null` is valid and expected for most new notes.
+My Storeroom is not a real space in the DB -- it's a UI filter for `notes WHERE space_id IS NULL`.
+
+### 5. Widgets live below the note body -- never inline in prose
+
+Widgets (Reminder, File, Link) always render in an "Attached Widgets" section below the TipTap editor.
+They are not block types inside TipTap. Checklists ARE a TipTap block type (not a widget).
+
+### 6. Standalone widgets are valid
+
+`widgets.note_id = null` means the widget exists independently (e.g. a reminder with no note).
+Standalone widgets appear in Home > Upcoming and in My Storeroom.
 
 ---
 
-## Build Phase Status
+## Autosave Architecture (Hybrid Sync)
 
-**Phase 1 — COMPLETE**
+This is a deliberate middle-path decision. Full offline-first (IndexedDB + service worker +
+conflict resolution) was explicitly ruled out as too complex. The chosen approach:
 
-Auth + UAM, Project CRUD, Workstream CRUD, Note (TipTap), File (R2), Task, List View, Today View.
+**Every keystroke:** Write TipTap content to `localStorage` immediately. Key: `ruang_draft_${noteId}`.
+**1.5 seconds after last keystroke:** Debounced Supabase sync fires (PATCH `/api/notes/[id]`).
+**On sync failure:** Retry silently up to 3 times with exponential backoff.
+**On app open:** Load last `localStorage` state immediately while fresh DB data fetches behind it.
+**PWA:** Installable, but online required for sync. localStorage covers "bad wifi" scenarios.
 
-**Phase 2 — Next**
+Sync indicator states (top navbar on desktop, below date line on mobile):
+- **Typing:** indicator hidden
+- **Syncing:** subtle spinner + "Saving..."
+- **Synced:** "Saved" text, fades after 2 seconds
+- **Error:** "Couldn't save — check connection" (persistent, never auto-dismiss)
 
-Reminder + email delivery (Resend), Link entry, Quick Capture FAB, Project Timeline Board,
-Entry filters.
+There is no save button anywhere in the app.
 
-**Phase 3**
-
-Kanban View, Focus Mode, Tags, PWA wrapper, Code block + Callout TipTap extensions,
-@mention with notification.
-
----
-
-## Views to Build (Phase 2+)
-
-### Project Timeline Board (Priority 1 in Phase 2)
-
-Custom CSS grid — NOT FullCalendar. Architecture:
-- Left panel frozen: project/workstream tree, collapsible rows, color-coded
-- Horizontal scrollable date columns (week default; day/month toggle)
-- Today column highlighted amber
-- Entry chips: type icon + truncated label
-- Chip colors: note/file → project color; reminder → amber; link → purple; task → neutral; done task → green strikethrough
-- "+N more" badge beyond 2 entries per cell
-- Hover empty cell: "+ pin here" affordance
-- Click chip: opens side panel
-- Drag chip: reschedules via dnd-kit
-- Unscheduled sidebar drawer
-
-### Today View (exists, may need polish)
-
-Cross-project aggregation of everything pinned to today. Groups by project + workstream.
-"Next Up" nudge at bottom for unscheduled items.
+Draft cleanup: remove `localStorage` key after successful Supabase sync.
 
 ---
 
-## ADHD-Friendly Design Rules (Product Requirements)
+## Design Tokens (Locked)
 
-1. Today View is always the default landing — never blank project list
-2. Inbox / Brain Dump Zone: zero required fields
-3. Quick Capture FAB: always visible, pre-fills current project + today
-4. Focus Mode per workstream: hides everything else
-5. Color before text: project + workstream colors user-assigned
-6. Visual status pills, never text dropdowns; overdue tasks pulse
-7. No mandatory fields — any entry only requires a title
-8. "Next Up" nudge at bottom of Today View only (not a popup)
-9. Compact chips in Calendar — scan, don't read
-10. Collapsed project rows in Timeline reduce cognitive load
+```css
+/* Text */
+--text-primary:      #2c3848;   /* headings, primary content */
+--text-secondary:    #738290;   /* secondary labels, ghost buttons */
+--text-muted:        #9aaab8;   /* tertiary text, placeholder hints */
+--text-faint:        #b8c8d6;   /* timestamps, date labels */
+
+/* Backgrounds */
+--bg-base:           #ffffff;   /* main content areas */
+--bg-subtle:         #f4f5f7;   /* sidebar background */
+--bg-surface:        #f8fafc;   /* widget cards, calendar tray */
+--bg-elevated:       #edf3fa;   /* icon wells */
+--bg-page:           #f6f8fb;   /* login page */
+
+/* Borders */
+--border-default:    #e8ecf2;   /* card borders, dividers */
+--border-light:      #f2f5f8;   /* list row dividers */
+--border-medium:     #d8e0ea;   /* input borders, section separators */
+
+/* Accent: Soft Blue (active states, FAB, today highlight, checked checkboxes) */
+--accent-blue:       #A1B5D8;
+--accent-blue-dark:  #4a6090;
+--accent-blue-bg:    #dce8f6;
+
+/* Accent: Sage Green (space chips, storeroom count) */
+--accent-green:      #E4F0D0;
+--accent-green-mid:  #C2D8B9;
+--accent-green-dark: #4a6a40;
+
+/* Accent: Slate (primary buttons, sidebar icons, toolbar) */
+--accent-slate:      #738290;
+--accent-slate-dark: #4a5a68;
+
+/* Danger: Orange (destructive actions only) */
+--danger:            #F08050;
+--danger-dark:       #E06830;
+--danger-bg:         #fff4ee;
+--danger-border:     #f8c8a8;
+```
+
+### Typography
+
+```
+Display / Headings: 'Newsreader', Georgia, serif
+  Load: https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400&display=swap
+  Page titles:          26-34px, weight 400, letter-spacing -0.02 to -0.025em, color #2c3848
+  Section heads:        18-22px, weight 400, letter-spacing -0.02em
+  Card titles:          14.5-15px, weight 400
+  Note title (editor):  26-34px, letter-spacing -0.025em, line-height 1.2
+
+Body / UI: system-ui, -apple-system, 'Segoe UI', sans-serif
+  Body text:            14-14.5px, line-height 1.78, color #3a4a5c
+  UI labels:            12-13.5px, color #2c3848
+  Secondary:            11.5-12.5px, color #9aaab8
+  Timestamps:           10.5-11.5px, color #b8c8d6
+  Input text:           13.5-15px, color #2c3848
+
+Section labels: ui-monospace, monospace
+  9.5px, letter-spacing 0.1em, UPPERCASE, weight 500, color #b0bcc8
+```
+
+### Spacing
+
+```
+Desktop content padding:    36px 44px
+Note editor padding:        44px 80px (max-width 820px, centered)
+Sidebar width:              208px
+Top navbar height:          52px (desktop), 56px (mobile)
+Bottom tab bar height:      64px (mobile, safe-area bottom padding)
+Formatting toolbar height:  46px (desktop), 44px (mobile)
+Card border-radius:         11-12px
+Input border-radius:        8-10px
+Button border-radius:       7-10px
+Widget card radius:         10px
+Row item min-height:        52px (mobile), 44px (desktop)
+Icon well size:             28-44px square, radius 6-10px
+```
+
+### Shadows
+
+```
+Note card (rest):   0 1px 4px rgba(44,56,72,.04)
+Note card (hover):  0 6px 20px rgba(44,56,72,.09)
+Modal / overlay:    0 16px 56px rgba(44,56,72,.14), 0 2px 8px rgba(44,56,72,.06)
+FAB (rest):         0 4px 16px rgba(161,181,216,.4)
+FAB (hover):        0 8px 28px rgba(161,181,216,.5)
+FAB menu popup:     0 8px 32px rgba(44,56,72,.13), 0 2px 6px rgba(44,56,72,.06)
+```
+
+### Motion
+
+```
+Screen entry:    fadeUp -- opacity 0 to 1, translateY 8px to 0, 0.2s ease
+Drawer:          slideLeft -- translateX(-100%) to 0, 0.22s ease
+Hover:           0.1-0.15s on background, shadow, transform
+Note card hover: translateY(-2px) + enhanced shadow
+FAB open:        rotate(45deg) + background #738290, 0.15s
+Cursor blink:    pulse -- opacity 1 to 0.4 to 1, 1.1s ease infinite
+```
 
 ---
 
-## Do Not Build (Explicitly Cut)
+## Screen Inventory and Routes
 
-- File versioning (re-upload under same entry instead)
-- Snooze from email link in reminder emails
-- Real-time collaborative editing (single-editor only)
-- Activity log / audit trail
-- External client access (internal team only)
-- FullCalendar for Timeline Board (custom CSS grid only)
-- Email notifications for tasks (in-app only)
+| Screen | Route | Notes |
+|---|---|---|
+| Login | `/login` | Full-screen, no shell |
+| Home | `/home` | Default landing. Pinned + Recent + Upcoming |
+| Note Editor | `/note/[id]`, `/note/new` | Full content area |
+| Note Editor (checklist) | `/note/new?type=checklist` | Pre-loads checklist block |
+| My Storeroom | `/storeroom` | All unassigned notes |
+| My Room | `/room` | Today focus + pinned + quick links + coming up |
+| Search | `/search` | Full-text search |
+| Calendar | `/calendar` | Month/week, drag to assign date |
+| Account Settings | `/settings` | Profile, password, connected accounts, danger zone |
+
+All authenticated routes live inside an App Shell with top navbar + sidebar (desktop)
+or top header + bottom tab bar (mobile).
 
 ---
 
-## Model Strategy
+## App Shell Components
 
-- **claude-sonnet-4-6** — default for all code generation
-- **claude-opus-4-8** — escalate only for DB schema design, hard architecture decisions, deep bugs
-- Switch mid-session in Claude Code with `/model`
-- API calls from inside the app: model string `claude-sonnet-4-6`
+### Desktop
+
+**Top Navbar** (52px, white, border-bottom 1px #e8ecf2)
+- Left: logo mark + wordmark "ruang" (Newsreader 17px), navigates to /home
+- Center-left: 4 nav tabs -- Home / Calendar / My Room / Search
+  - Active tab: color #2c3848, font-weight 580, border-bottom 2.5px solid #A1B5D8
+  - Inactive: color #9aaab8
+- Right: autosave indicator (inside note only) + notification bell + avatar (32px, navigates to /settings)
+
+**Left Sidebar** (208px, bg #f4f5f7, border-right 1px #e8ecf2, always visible in MVP)
+- Sections: PINNED (My Storeroom with green count badge) / SPACES (tree with + button) / Settings gear
+- Space color dots: level 1 = 7px, level 2 = 6px, level 3 = 5px dot
+- Active item: bg #dce8f6, color #4a6090, font-weight 580
+- Sidebar is NOT collapsible in Phase 1
+
+### Mobile
+
+**Top Header** (56px, white, border-bottom 1px #e8ecf2)
+- Default: hamburger left, logo center, bell + avatar right
+- Inside note editor: back chevron left, note title center, overflow menu right
+
+**Bottom Tab Bar** (64px, white, border-top 1px #e8ecf2, safe-area bottom)
+- 4 tabs: Home / Calendar / My Room / Search
+- Each: icon (SVG 20px) + label (10px), inactive #9aaab8, active #4a6090
+- Hidden when note editor is open (editor is full-screen)
+
+**Left Drawer** (280px, slides from left, slideLeft 0.22s, backdrop closes on tap)
+- Contents: My Storeroom / Spaces tree / Settings / Profile footer
+
+---
+
+## FAB (Floating Action Button)
+
+- Circle, 52-54px, bg #A1B5D8, white + icon
+- Desktop: fixed bottom 28px, right 28px, z-index 51
+- Mobile: fixed bottom 80px, right 20px, z-index 30
+- Open state: rotate 45deg, bg #738290
+- Popup: desktop = fixed card above FAB (bottom 90px, right 28px); mobile = bottom sheet
+
+5 items in create menu:
+| Label | Action |
+|---|---|
+| Note | Navigate to /note/new |
+| To-do | Navigate to /note/new?type=checklist |
+| Reminder | Navigate to /note/new, pre-attach Reminder widget |
+| File Upload | Navigate to /note/new, pre-attach File widget |
+| Link / Bookmark | Navigate to /note/new, pre-attach Link widget |
+
+---
+
+## Widget System
+
+Widgets live in an "Attached Widgets" zone BELOW the TipTap note body. Never inline in prose.
+A widget with `note_id = null` is standalone (appears in Home > Upcoming, My Storeroom).
+
+Entry points to add a widget:
+1. "Add" button in the formatting toolbar inside the note editor
+2. FAB create menu (Reminder, File Upload, Link/Bookmark)
+
+Widget Picker modal: 480px centered desktop / bottom sheet mobile.
+3 option cards with icon wells: Reminder (#edf3fa bg) / File (#f4faf0 bg) / Link (#edf3fa bg).
+
+---
+
+## Content Types
+
+### Note
+- Opens with blinking cursor (#A1B5D8 animated bar). No fields required.
+- First line auto-becomes title.
+- TipTap RTE. Slash commands via `/`.
+- Supported blocks: H1/H2/H3, paragraph, bullet list, numbered list, checklist, code block, callout, divider.
+
+### To-do (Checklist)
+- Identical to Note but opens with a checklist block pre-populated.
+- Checklist item checked state: bg #A1B5D8, white tick, text line-through, color #b8c8d6.
+
+---
+
+## Organization System
+
+### Spaces
+- Optional. A note with no space is valid (lives in My Storeroom).
+- Max depth: 3 levels. Enforced in DB and UI.
+- Each space: name, color, emoji icon.
+- Moving a space re-nests all child spaces (update path for all descendants).
+
+### Tags
+- Flat labels, JSONB array on `notes`.
+- User-created, color-coded.
+- Tag chip styles: green `.tag-chip` (#E4F0D0 bg, #4a6a40 text) or blue `.tag-chip-blue` (#dce8f6 bg, #4a6090 text).
+
+### Dates
+- Any note or widget can have a `pinned_date` and optional `pinned_date_end`.
+- Date assigned = item appears on Calendar.
+- No date = stays in My Storeroom / Recent only.
+
+---
+
+## Empty States
+
+| Screen | Message |
+|---|---|
+| Home -- Pinned | "Pin a note to keep it at the top." |
+| Home -- Upcoming | Hidden entirely if empty |
+| My Storeroom | "Nothing here. That's a good sign." |
+| Space (empty) | "Nothing in this space yet." |
+| Calendar day | `+` icon on hover only |
+| Search (no results) | "Nothing found for '[query]'." |
+| First-time / nothing | "Your Ruang is ready. Tap + to write something." |
+
+---
+
+## Key Interactions (Implement Carefully)
+
+These define the Ruang feel. Get these right.
+
+1. **FAB expand** -- rotate + color change + popup card above, smooth 0.15s
+2. **Note card to full-screen** -- fadeUp animation (translateY 8px to 0), feels like card expanding
+3. **Autosave indicator** -- "Saved" appears quietly and fades in 2s; never alarming
+4. **Checking off checklist item** -- checkbox fills #A1B5D8, text strikes through (subtle transition)
+5. **Slash command picker** -- inline, keyboard-navigable, closes on Escape
+6. **Dragging note onto calendar** -- visual drag from unscheduled tray, date cell highlights on hover
+7. **Widget picker opening** -- backdrop blur + modal slides in
+8. **Left drawer (mobile)** -- slideLeft 0.22s, backdrop tap closes
+9. **Today cell (calendar)** -- #A1B5D8 circle date number, blue outline on cell
+10. **Blinking cursor (empty note)** -- #A1B5D8 animated bar, welcoming not intimidating
+
+---
+
+## Phase Roadmap
+
+### Phase 1 -- Core (current build target)
+
+- Auth (email/password + Google OAuth)
+- Note + To-do (checklist) creation and editing
+- Autosave with localStorage draft cache + Supabase sync
+- Widgets: Reminder, File Attachment, Link Preview (standalone + attached)
+- Widget picker modal / bottom sheet
+- Spaces (nestable max 3 levels)
+- Tags
+- Home dashboard (Pinned + Recent + Upcoming)
+- My Storeroom
+- My Room (Today's Focus + Pinned Notes + Quick Links + Coming Up)
+- Calendar (month + week, drag to assign date, unscheduled tray)
+- Search (full-text, recent searches)
+- Account Settings (profile, password, Google connected, log out, delete account)
+- Notification bell (in-app, badge count)
+- FAB create menu (5 items)
+- Desktop nav (top navbar + persistent sidebar)
+- Mobile nav (bottom tab bar + left drawer + FAB)
+- PWA installable
+
+### Phase 2 -- Polish and Power
+
+- Reminder email delivery (Resend)
+- Note version history (last 20 versions, revertible)
+- Note locking (prevent edits without unlocking)
+- Export note as PDF or plain text
+- Space sharing (invite by email, viewer/editor roles)
+- Focus mode (hides everything except current space)
+- Keyboard shortcuts reference panel
+- User personalization (accent color, typography, surface texture, density, landing page, theme)
+
+### Phase 3 -- Public Layer
+
+- Public Ruang page (`ruang.app/[username]`)
+- Publish individual notes
+- Threaded note replies
+- Follow a user's Ruang page
+- Custom domain for public page
+
+---
+
+## Intended File Structure
+
+```
+src/
+  app/
+    (app)/
+      layout.tsx               -- App Shell (navbar + sidebar + FAB)
+      home/page.tsx            -- /home (Pinned + Recent + Upcoming)
+      note/
+        new/page.tsx           -- /note/new (blank note, optional ?type=checklist)
+        [id]/page.tsx          -- /note/[id] (existing note)
+      storeroom/page.tsx       -- /storeroom
+      room/page.tsx            -- /room
+      search/page.tsx          -- /search
+      calendar/page.tsx        -- /calendar
+      settings/page.tsx        -- /settings
+    api/
+      auth/[...nextauth]/      -- NextAuth handler
+      notes/
+        route.ts               -- GET list, POST create
+        [id]/route.ts          -- GET, PATCH (autosave), DELETE
+      spaces/
+        route.ts               -- GET list, POST create
+        [id]/route.ts          -- GET, PATCH, DELETE
+      widgets/
+        route.ts               -- GET list, POST create
+        [id]/route.ts          -- GET, PATCH, DELETE
+      files/
+        upload-url/route.ts    -- GET presigned PUT URL for R2
+        route.ts               -- POST save metadata
+        [id]/route.ts          -- GET presigned GET URL, DELETE
+      notifications/route.ts   -- GET, PATCH (mark read)
+      users/route.ts           -- GET + PATCH current user
+    login/page.tsx
+    layout.tsx
+    page.tsx                   -- redirect to /home or /login
+    providers.tsx
+  components/
+    editor/
+      TipTapEditor.tsx         -- main RTE component
+      SlashCommands.tsx        -- / command picker
+    notes/
+      NoteCard.tsx             -- card for Home + Storeroom
+      NoteRow.tsx              -- row item for list views
+    widgets/
+      WidgetPicker.tsx         -- modal/sheet for adding widgets
+      ReminderWidget.tsx
+      FileWidget.tsx
+      LinkWidget.tsx
+    layout/
+      AppShell.tsx
+      Sidebar.tsx
+      TopNavbar.tsx
+      MobileTabBar.tsx
+      MobileDrawer.tsx
+      FAB.tsx
+    ui/                        -- shadcn/ui components
+  lib/
+    supabase.ts                -- createServiceClient (never use for file storage)
+    r2.ts                      -- uploadToR2, getR2PresignedPutUrl, getR2SignedUrl, deleteFromR2
+    auth.ts                    -- NextAuth config
+    autosave.ts                -- localStorage draft cache + debounced Supabase sync
+    api-helpers.ts             -- requireAuth, error helpers
+    utils.ts
+  types/index.ts               -- all TypeScript interfaces
+```
+
+---
+
+## Cloudflare R2 Integration
+
+```typescript
+// lib/r2.ts -- required functions
+getR2PresignedPutUrl(key: string, contentType: string): Promise<string>
+getR2SignedUrl(key: string): Promise<string>
+deleteFromR2(key: string): Promise<void>
+
+// SDK: @aws-sdk/client-s3
+// Endpoint: https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com
+// Never use supabase.storage anywhere
+```
+
+---
+
+## Mobile-Specific Requirements
+
+- PWA installable (manifest + service worker)
+- All primary actions reachable without scrolling to top
+- Note editor: full-screen overlay, keyboard-aware layout
+- Formatting toolbar: 44px height, overflow-x auto, no scrollbar, docked above keyboard
+- Widget picker: bottom sheet only (not center modal)
+- No hover states; all interactions are tap or long-press
+- Calendar: month grid only (no unscheduled tray; access via My Storeroom)
+- Safe-area insets on bottom tab bar (iOS home indicator)
+- Drawer: swipe-right-to-close gesture (optional but recommended)
+
+---
+
+## Session Notes for Claude Code
+
+- For GitHub push: use Classic PAT with `repo` scope embedded in remote URL:
+  `git remote set-url origin https://<PAT>@github.com/Bogi674/ruang-project-management.git`
+- Shell paths with `(app)` directory require escaping: `src/app/\(app\)/...`
+- Default model: `claude-sonnet-4-6`. Escalate to `claude-opus-4-8` for complex architecture decisions.
+- Build warning suppression: set `NPM_FLAGS=--loglevel=error` in Vercel env vars (silences ESLint 8 deprecation warnings)
+- Design reference files in project root: `Ruang_Prototype_dc.html` (desktop), `Ruang_Mobile_dc.html` (mobile)
+  -- open via local server with `support.js`. These are the source of truth for visual implementation.
 
 ---
 
 ## Session Starter Prompt
 
-Paste at top of each new Claude Code session:
+Paste this at the top of each new Claude Code session:
 
 ```
-Building Ruang: Next.js 14 App Router + TypeScript + Supabase (PostgreSQL + Auth only)
-+ Cloudflare R2 (all file storage, never Supabase storage) + TipTap + NextAuth + Resend
-+ Tailwind + shadcn/ui. Deployed on Vercel.
+Building Ruang v1.0 -- a note-first personal workspace. NOT the old PM tool.
+Stack: Next.js 14 App Router + TypeScript + Supabase (DB + auth only, NEVER file storage)
++ Cloudflare R2 (all file bytes) + TipTap RTE + NextAuth (Google OAuth) + Tailwind + shadcn/ui.
+Deployed on Vercel.
 
-Hierarchy: Platform > Project > Workstream > Entry
-Entry types: note / file / task / reminder / link
+Key architecture decisions (locked):
+- No Projects concept. Organization via Spaces only (nestable, max 3 levels).
+- Content types: Note, Checklist (same as Note with checklist block pre-loaded).
+- Widgets (Reminder, File, Link) attach BELOW note body -- never inline in prose.
+- Autosave: every keystroke to localStorage, debounced 1.5s to Supabase. No save button.
+- Note title = auto-derived from first line of content. No title field in UI.
+- note.space_id = null means the note lives in My Storeroom (not a real DB entity).
+- All file bytes go to R2. Never supabase.storage. r2_object_key stored in files table.
 
-CRITICAL — always do this when creating a project:
-After inserting into projects, immediately insert the creator into project_members
-with role "owner". Without this, checkProjectAccess() returns null and the project
-is invisible and inaccessible.
+Refer to CLAUDE.md for full context, design tokens, data model, and critical rules.
 
-CRITICAL — column names that have caused bugs before (do not revert):
-- files table: size_bytes (NOT size), r2_object_key (NOT storage_path)
-- note_versions table: version_number (NOT version_num), content_snapshot (NOT content), saved_by (NOT created_by)
-- notifications table: recipient_id (NOT user_id), is_read (NOT read)
-- workstreams table: NO created_by column
-
-Valid project member roles: "owner" | "editor" | "viewer" only.
-"admin" is not a valid role and will silently break all permission checks.
-
-Refer to CLAUDE.md, ruang_mvp_schema.sql, and Ruang_database_structure.md for all details.
-
-Today: [specific feature to build]
+Today's task: [specific feature to build]
 ```
