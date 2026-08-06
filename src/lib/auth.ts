@@ -38,28 +38,25 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (account?.provider === 'google') {
         const db = createServerClient();
+
         const { data: existing } = await db
           .from('users')
           .select('id')
           .eq('email', user.email!)
           .single();
-        if (!existing) {
-          const { data: authUser } = await db.auth.admin.createUser({
+
+        if (existing) {
+          user.id = existing.id;
+        } else {
+          // Creates the Supabase auth user. The handle_new_user trigger
+          // fires automatically and inserts the public.users row.
+          const { data: authUser, error } = await db.auth.admin.createUser({
             email: user.email!,
             email_confirm: true,
             user_metadata: { name: user.name, avatar_url: user.image },
           });
-          if (authUser.user) {
-            await db.from('users').insert({
-              id: authUser.user.id,
-              email: user.email!,
-              name: user.name || user.email!.split('@')[0],
-              avatar_url: user.image || null,
-            });
-            user.id = authUser.user.id;
-          }
-        } else {
-          user.id = existing.id;
+          if (error || !authUser.user) return false;
+          user.id = authUser.user.id;
         }
       }
       return true;
