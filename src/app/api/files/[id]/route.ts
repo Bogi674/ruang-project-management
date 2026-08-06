@@ -1,52 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorized, notFound, checkProjectAccess } from "@/lib/api-helpers";
-import { deleteFromR2, getR2PublicUrl } from "@/lib/r2";
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, apiError } from '@/lib/api-helpers';
+import { createServerClient } from '@/lib/supabase';
+import { getR2SignedUrl, deleteFromR2 } from '@/lib/r2';
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const { session, db } = await requireAuth();
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    const { data: file } = await db
-      .from("files")
-      .select("*, entry:entries(project_id)")
-      .eq("id", params.id)
-      .single();
+  const db = createServerClient();
+  const { data: file, error: dbError } = await db
+    .from('files')
+    .select('*')
+    .eq('id', params.id)
+    .eq('uploaded_by', userId!)
+    .single();
 
-    if (!file) return notFound("File not found");
+  if (dbError || !file) return apiError('Not found', 404);
 
-    const projectId = (file.entry as { project_id: string })?.project_id;
-    const role = await checkProjectAccess(db, projectId, session.user.id, "editor");
-    if (!role) return notFound("File not found");
-
-    await deleteFromR2(file.r2_object_key);
-    await db.from("files").delete().eq("id", params.id);
-
-    return new NextResponse(null, { status: 204 });
-  } catch {
-    return unauthorized();
-  }
+  const signedUrl = await getR2SignedUrl(file.r2_object_key);
+  return NextResponse.json({ url: signedUrl, file });
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const { session, db } = await requireAuth();
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    const { data: file } = await db
-      .from("files")
-      .select("*, entry:entries(project_id)")
-      .eq("id", params.id)
-      .single();
+  const db = createServerClient();
+  const { data: file } = await db.from('files').select('r2_object_key').eq('id', params.id).eq('uploaded_by', userId!).single();
+  if (!file) return apiError('Not found', 404);
 
-    if (!file) return notFound("File not found");
-
-    const projectId = (file.entry as { project_id: string })?.project_id;
-    const role = await checkProjectAccess(db, projectId, session.user.id);
-    if (!role) return notFound("File not found");
-
-    const url = getR2PublicUrl(file.r2_object_key);
-
-    return NextResponse.json({ url, file });
-  } catch {
-    return unauthorized();
-  }
+  await deleteFromR2(file.r2_object_key);
+  await db.from('files').delete().eq('id', params.id);
+  return new NextResponse(null, { status: 204 });
 }

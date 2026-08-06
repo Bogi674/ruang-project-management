@@ -1,43 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorized } from "@/lib/api-helpers";
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, apiError } from '@/lib/api-helpers';
+import { createServerClient } from '@/lib/supabase';
 
-export async function GET(req: NextRequest) {
-  try {
-    const { session, db } = await requireAuth();
-    const unreadOnly = req.nextUrl.searchParams.get("unread") === "true";
+export async function GET() {
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    let query = db
-      .from("notifications")
-      .select("*")
-      .eq("recipient_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
+  const db = createServerClient();
+  const { data, error: dbError } = await db
+    .from('notifications')
+    .select('*')
+    .eq('recipient_id', userId!)
+    .order('created_at', { ascending: false })
+    .limit(20);
 
-    if (unreadOnly) query = query.eq("is_read", false);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return NextResponse.json(data || []);
-  } catch {
-    return unauthorized();
-  }
+  if (dbError) return apiError(dbError.message);
+  return NextResponse.json(data || []);
 }
 
 export async function PATCH(req: NextRequest) {
-  try {
-    const { session, db } = await requireAuth();
-    const { markAllRead } = await req.json();
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    if (markAllRead) {
-      await db
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("recipient_id", session.user.id)
-        .eq("is_read", false);
-    }
+  const body = await req.json();
+  const db = createServerClient();
 
+  if (body.mark_all_read) {
+    await db.from('notifications').update({ is_read: true }).eq('recipient_id', userId!).eq('is_read', false);
     return NextResponse.json({ ok: true });
-  } catch {
-    return unauthorized();
   }
+
+  if (body.id) {
+    const { data } = await db.from('notifications').update({ is_read: true }).eq('id', body.id).eq('recipient_id', userId!).select().single();
+    return NextResponse.json(data);
+  }
+
+  return apiError('Invalid request', 400);
 }

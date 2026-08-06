@@ -1,79 +1,79 @@
-import type { Config } from "tailwindcss";
+import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  darkMode: ["class"],
   content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-        amber: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-        },
+        'text-primary': '#2c3848',
+        'text-secondary': '#738290',
+        'text-muted': '#9aaab8',
+        'text-faint': '#b8c8d6',
+        'bg-base': '#ffffff',
+        'bg-subtle': '#f4f5f7',
+        'bg-surface': '#f8fafc',
+        'bg-elevated': '#edf3fa',
+        'bg-page': '#f6f8fb',
+        'border-default': '#e8ecf2',
+        'border-light': '#f2f5f8',
+        'border-medium': '#d8e0ea',
+        'accent-blue': '#A1B5D8',
+        'accent-blue-dark': '#4a6090',
+        'accent-blue-bg': '#dce8f6',
+        'accent-green': '#E4F0D0',
+        'accent-green-mid': '#C2D8B9',
+        'accent-green-dark': '#4a6a40',
+        'accent-slate': '#738290',
+        'accent-slate-dark': '#4a5a68',
+        danger: '#F08050',
+        'danger-dark': '#E06830',
+        'danger-bg': '#fff4ee',
+        'danger-border': '#f8c8a8',
+      },
+      fontFamily: {
+        serif: ['Newsreader', 'Georgia', 'serif'],
+        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['ui-monospace', 'monospace'],
+      },
+      fontSize: {
+        '10': '10px',
+        '10.5': '10.5px',
+        '11': '11px',
+        '11.5': '11.5px',
+        '12': '12px',
+        '13': '13px',
+        '13.5': '13.5px',
+        '14': '14px',
+        '14.5': '14.5px',
+        '15': '15px',
+      },
+      boxShadow: {
+        card: '0 1px 4px rgba(44,56,72,.04)',
+        'card-hover': '0 6px 20px rgba(44,56,72,.09)',
+        modal: '0 16px 56px rgba(44,56,72,.14), 0 2px 8px rgba(44,56,72,.06)',
+        fab: '0 4px 16px rgba(161,181,216,.4)',
+        'fab-hover': '0 8px 28px rgba(161,181,216,.5)',
+        'fab-menu': '0 8px 32px rgba(44,56,72,.13), 0 2px 6px rgba(44,56,72,.06)',
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        card: '12px',
+        input: '10px',
+        btn: '8px',
+        widget: '10px',
       },
-      keyframes: {
-        pulse: {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
-        },
-        "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(4px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-      },
-      animation: {
-        pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "fade-in": "fade-in 0.15s ease-out",
+      transitionDuration: {
+        '80': '80ms',
+        '120': '120ms',
+        '150': '150ms',
+        '220': '220ms',
       },
     },
   },
   plugins: [],
 };
+
 export default config;
