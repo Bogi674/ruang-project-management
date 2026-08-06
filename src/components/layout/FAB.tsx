@@ -1,0 +1,60 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+const FAB_ITEMS = [
+  { label: 'Note', icon: '✏️', action: () => '/note/new' },
+  { label: 'To-do', icon: '✓', action: () => '/note/new?type=checklist' },
+  { label: 'Reminder', icon: '🔔', action: () => '/note/new?widget=reminder' },
+  { label: 'File Upload', icon: '📎', action: () => '/note/new?widget=file' },
+  { label: 'Link / Bookmark', icon: '🔗', action: () => '/note/new?widget=link' },
+];
+
+export function FAB() {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="fixed z-50 md:bottom-7 md:right-7 bottom-[84px] right-5">
+      {open && (
+        <div className="absolute bottom-[68px] right-0 bg-bg-base border border-border-default rounded-[14px] shadow-fab-menu p-2 w-52 animate-fadeUp">
+          {FAB_ITEMS.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => { setOpen(false); router.push(item.action()); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-subtle transition-colors duration-120 text-left"
+            >
+              <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-elevated text-base flex-shrink-0">
+                {item.icon}
+              </span>
+              <span className="text-13 text-text-primary">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-fab hover:shadow-fab-hover transition-all duration-150"
+        style={{
+          background: open ? '#738290' : '#A1B5D8',
+          transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
+        }}
+        aria-label="Create"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
