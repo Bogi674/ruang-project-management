@@ -1,47 +1,30 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorized } from "@/lib/api-helpers";
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, apiError } from '@/lib/api-helpers';
+import { createServerClient } from '@/lib/supabase';
 
-export async function GET(req: NextRequest) {
-  try {
-    const { session, db } = await requireAuth();
-    const search = req.nextUrl.searchParams.get("q");
+export async function GET() {
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    // Admin can list all users; others only get themselves + project members
-    let query = db
-      .from("users")
-      .select("id, public_id, name, email, avatar_url, role, created_at");
-
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
-    }
-
-    if (session.user.role !== "admin") {
-      // Only return project members
-      const { data: memberships } = await db
-        .from("project_members")
-        .select("project_id")
-        .eq("user_id", session.user.id);
-
-      const projectIds = (memberships || []).map((m) => m.project_id);
-      if (!projectIds.length) {
-        return NextResponse.json([]);
-      }
-
-      const { data: members } = await db
-        .from("project_members")
-        .select("user_id")
-        .in("project_id", projectIds);
-
-      const seen = new Set<string>();
-      const userIds = (members || []).map((m) => m.user_id).filter((id) => { if (seen.has(id)) return false; seen.add(id); return true; });
-      query = query.in("id", userIds);
-    }
-
-    const { data, error } = await query.limit(50);
-    if (error) throw error;
-    return NextResponse.json(data || []);
-  } catch {
-    return unauthorized();
-  }
+  const db = createServerClient();
+  const { data, error: dbError } = await db.from('users').select('*').eq('id', userId!).single();
+  if (dbError || !data) return apiError('Not found', 404);
+  return NextResponse.json(data);
 }
 
+export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireAuth();
+  if (error) return error;
+
+  const body = await req.json();
+  const db = createServerClient();
+  const allowed = ['name', 'accent_color', 'typography_preference', 'surface_preference', 'density_preference', 'landing_page_preference', 'theme_preference'];
+  const updates: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in body) updates[key] = body[key];
+  }
+
+  const { data, error: dbError } = await db.from('users').update(updates).eq('id', userId!).select().single();
+  if (dbError) return apiError(dbError.message);
+  return NextResponse.json(data);
+}

@@ -1,53 +1,30 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorized, badRequest, checkProjectAccess } from "@/lib/api-helpers";
-import { uploadToR2 } from "@/lib/r2";
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, apiError } from '@/lib/api-helpers';
+import { createServerClient } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
-  try {
-    const { session, db } = await requireAuth();
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const entryId = formData.get("entryId") as string;
+  const { error, userId } = await requireAuth();
+  if (error) return error;
 
-    if (!file || !entryId) return badRequest("file and entryId required");
-    if (file.size > 20 * 1024 * 1024) return badRequest("File must be under 20MB");
+  const body = await req.json();
+  const { widget_id, filename, r2_object_key, mime_type, size_bytes } = body;
+  if (!widget_id || !filename || !r2_object_key) return apiError('Missing required fields', 400);
 
-    const { data: entry } = await db
-      .from("entries")
-      .select("project_id")
-      .eq("id", entryId)
-      .single();
+  const db = createServerClient();
+  const { data, error: dbError } = await db
+    .from('files')
+    .insert({
+      widget_id,
+      uploaded_by: userId!,
+      filename,
+      r2_object_key,
+      r2_bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+      mime_type: mime_type || 'application/octet-stream',
+      size_bytes: size_bytes || 0,
+    })
+    .select()
+    .single();
 
-    if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-
-    const role = await checkProjectAccess(db, entry.project_id, session.user.id, "editor");
-    if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    const storagePath = `entries/${entryId}/${Date.now()}-${file.name}`;
-    const arrayBuffer = await file.arrayBuffer();
-
-    await uploadToR2(storagePath, arrayBuffer, file.type);
-
-    const { data: fileRecord, error: dbError } = await db
-      .from("files")
-      .insert({
-        entry_id: entryId,
-        project_id: entry.project_id,
-        uploaded_by: session.user.id,
-        filename: file.name,
-        size_bytes: file.size,
-        mime_type: file.type,
-        r2_object_key: storagePath,
-        r2_bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
-      })
-      .select()
-      .single();
-
-    if (dbError) throw dbError;
-
-    return NextResponse.json(fileRecord, { status: 201 });
-  } catch (err) {
-    console.error(err);
-    return unauthorized();
-  }
+  if (dbError) return apiError(dbError.message);
+  return NextResponse.json(data, { status: 201 });
 }
