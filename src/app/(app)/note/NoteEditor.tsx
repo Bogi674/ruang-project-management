@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Note, Widget, AutosaveState, Space, WidgetType } from '@/types';
+import { Note, Widget, AutosaveState, WidgetType } from '@/types';
+import { flattenSpaces } from '@/components/spaces/SpaceAssignMenu';
 import { TipTapEditor } from '@/components/editor/TipTapEditor';
 import { VersionHistory } from '@/components/editor/VersionHistory';
 import { WidgetPicker } from '@/components/widgets/WidgetPicker';
@@ -13,7 +14,7 @@ import { LinkWidget } from '@/components/widgets/LinkWidget';
 import { AutosaveIndicator } from '@/components/layout/AutosaveIndicator';
 import { scheduleSync, loadDraftFull, flushNote, cancelSync, installFlushHooks } from '@/lib/autosave';
 import { emitNotesChanged } from '@/lib/dnd';
-import { formatDate } from '@/lib/utils';
+import { useSpaces } from '@/lib/spaces';
 
 interface NoteEditorProps {
   noteId: string;
@@ -57,15 +58,11 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
   const [noteTitle, setNoteTitle] = useState(
     () => draftRef.current?.title ?? initialNote?.title ?? ''
   );
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const { spaces } = useSpaces();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialNote?.space_id || null);
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const createdAt = initialNote?.created_at || new Date().toISOString();
-
-  useEffect(() => {
-    fetch('/api/spaces').then(r => r.json()).then(d => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (titleRef.current) {
@@ -74,7 +71,9 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     }
   }, [noteTitle]);
 
-  const selectedSpace = spaces.find(s => s.id === selectedSpaceId) || initialNote?.space || null;
+  // Flattened so a nested space can be selected and resolved, not just top-level ones.
+  const flatSpaces = flattenSpaces(spaces);
+  const selectedSpace = flatSpaces.find(s => s.id === selectedSpaceId) || initialNote?.space || null;
 
   const triggerSync = useCallback(
     (newContent: object | null, title: string) => {
@@ -214,7 +213,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     <div className="flex flex-col min-h-[60vh] md:h-[calc(100vh-52px)] md:min-h-0">
       {/* Mobile action bar — the desktop action row is hidden on small screens,
           so delete / lock / history / export would otherwise be unreachable. */}
-      <div className="flex md:hidden items-center gap-1 px-5 pt-3 flex-shrink-0">
+      <div className="flex md:hidden items-center gap-1 px-4 pt-3.5 flex-shrink-0">
         <AutosaveIndicator state={autosave} />
         <div className="flex-1" />
         <button
@@ -374,8 +373,9 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
         </div>
       </div>
 
-      {/* Title area */}
-      <div className="px-5 pt-4 md:pt-0 md:px-20 max-w-[820px] md:mx-auto w-full flex-shrink-0">
+      {/* Title area — the mobile top padding keeps the title clear of the
+          fixed 56px app header instead of butting straight up against it. */}
+      <div className="px-4 pt-5 md:pt-0 md:px-20 max-w-[820px] md:mx-auto w-full flex-shrink-0">
         <textarea
           ref={titleRef}
           value={noteTitle}
@@ -388,7 +388,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
         />
 
         {/* Metadata row */}
-        <div className="flex items-center gap-3 flex-wrap mt-1 mb-3">
+        <div className="flex items-center gap-3 flex-wrap mt-2 mb-4">
           <span className="text-[11px] text-text-faint">
             Created: {formatCreatedAt(createdAt)}
           </span>
@@ -442,12 +442,13 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
                 >
                   No space (Storeroom)
                 </button>
-                {spaces.length > 0 && <div className="h-px bg-border-light mx-2 my-1" />}
-                {spaces.map(space => (
+                {flatSpaces.length > 0 && <div className="h-px bg-border-light mx-2 my-1" />}
+                {flatSpaces.map(space => (
                   <button
                     key={space.id}
                     onClick={() => handleSpaceSelect(space.id)}
                     className="w-full text-left px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
+                    style={{ paddingLeft: 12 + space._level * 12 }}
                   >
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: space.color || '#738290' }} />
                     {space.icon && `${space.icon} `}{space.name}
@@ -460,7 +461,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
       </div>
 
       {/* Editor with toolbar at top */}
-      <div className="flex-1 min-h-0 flex flex-col px-5 md:px-20 max-w-[820px] md:mx-auto w-full pb-2">
+      <div className="flex-1 min-h-0 flex flex-col px-4 md:px-20 max-w-[820px] md:mx-auto w-full pb-2">
         <TipTapEditor
           content={content}
           isChecklist={initialNote?.type === 'checklist'}
@@ -473,7 +474,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
 
       {/* Widgets zone */}
       {widgets.length > 0 && (
-        <div className="px-5 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-[#edf3fa] pt-4 pb-2 flex-shrink-0">
+        <div className="px-4 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-[#edf3fa] pt-4 pb-2 flex-shrink-0">
           <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-3">Attached</p>
           <div className="space-y-2">
             {widgets.map((w) => {

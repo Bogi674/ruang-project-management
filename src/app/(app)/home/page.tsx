@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { NoteCard } from '@/components/notes/NoteCard';
 import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/types';
+import { Greeting } from '@/components/home/Greeting';
 import { formatDate, getDayGreeting } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -29,14 +30,13 @@ export default async function HomePage() {
   const today = formatDate(new Date().toISOString());
 
   return (
-    <div className="px-11 py-9 max-w-[920px]">
-      {/* Greeting */}
-      <div className="mb-8">
-        <h1 className="font-serif text-[26px] text-text-primary leading-snug" style={{ letterSpacing: '-0.025em' }}>
-          {getDayGreeting()}, {userName.split(' ')[0]}.
-        </h1>
-        <p className="text-12 text-text-faint mt-1">{today}</p>
-      </div>
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[920px]">
+      {/* Greeting — corrected to the reader's local time on the client */}
+      <Greeting
+        name={userName.split(' ')[0]}
+        initialGreeting={getDayGreeting()}
+        initialDate={today}
+      />
 
       {/* Pinned */}
       <section className="mb-8">

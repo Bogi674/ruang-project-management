@@ -124,7 +124,13 @@ export function FAB() {
   const isLoading = creating;
 
   return (
-    <div ref={ref} className="fixed z-50 md:bottom-7 md:right-7 bottom-[84px] right-5">
+    // Mobile offset is derived from the tab bar height so the button always
+    // clears the bar (and the iOS home indicator) instead of overlapping it.
+    <div
+      ref={ref}
+      className="fixed z-50 right-5 md:right-7"
+      style={{ bottom: 'var(--fab-bottom)' }}
+    >
       {open && !isLoading && (
         <div className="absolute bottom-[68px] right-0 bg-bg-base border border-border-default rounded-[14px] shadow-fab-menu p-2 w-52 animate-fadeUp">
           {FAB_ITEMS.map((item) => (

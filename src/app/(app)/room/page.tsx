@@ -25,7 +25,7 @@ export default async function RoomPage() {
   const upcoming = widgetsRes.data || [];
 
   return (
-    <div className="px-11 py-9 max-w-[920px]">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[920px]">
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-serif text-[24px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>My Room</h1>
         <button className="flex items-center gap-1.5 text-12 text-text-secondary border border-border-default rounded-btn px-3 py-1.5 hover:bg-bg-surface transition-colors duration-120">

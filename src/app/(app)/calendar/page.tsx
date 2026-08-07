@@ -22,9 +22,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   const db = createServerClient();
 
   const [notesResult, widgetsResult] = await Promise.all([
+    // The calendar renders titles only, so the full TipTap document is left
+    // out — it was the single largest payload on this route and grew with
+    // every note the user owns.
     db
       .from('notes')
-      .select('id, title, content, type, pinned_date, space_id, updated_at, space:spaces(id, name, color)')
+      .select('id, title, type, pinned_date, space_id, updated_at, space:spaces(id, name, color)')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false }),
     db

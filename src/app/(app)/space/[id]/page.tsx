@@ -62,7 +62,7 @@ export default async function SpacePage({
   }
 
   return (
-    <div className="px-11 py-9 max-w-[860px]">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[860px]">
       <div className="mb-6">
         {trail.length > 0 && (
           <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">

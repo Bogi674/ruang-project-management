@@ -36,6 +36,7 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
   const [deleting, setDeleting] = useState(false);
   const [dragging, setDragging] = useState(false);
   const currentSpaceId = note.space_id ?? note.space?.id ?? null;
+  const hasChips = !!note.space || (note.tags?.length ?? 0) > 0;
 
   async function handleAssignSpace(nextSpaceId: string | null) {
     if (nextSpaceId === currentSpaceId) return;
@@ -95,18 +96,37 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
       }`}
       onMouseLeave={() => setConfirmDelete(false)}
     >
-      <Link href={`/note/${note.id}`} className="block no-underline p-4 cursor-pointer">
-        <div className="flex flex-wrap gap-1 mb-2">
-          {note.space && <TagChip label={note.space.name} variant="green" size="sm" />}
-          {note.tags?.slice(0, 2).map((tag) => (
-            <TagChip key={tag} label={tag} variant="blue" size="sm" />
-          ))}
-        </div>
-        <p className="font-serif text-[15px] text-text-primary leading-snug mb-1 line-clamp-2">{title}</p>
-        {preview && (
-          <p className="text-[11.5px] text-text-muted leading-relaxed line-clamp-2">{preview}</p>
+      <Link href={`/note/${note.id}`} className="block no-underline px-4 pt-3 pb-4 cursor-pointer">
+        {/* Chips row reserves a gutter on the right so nothing runs underneath
+            the floating delete / move / pin buttons. */}
+        {hasChips && (
+          <div className="flex items-start gap-2 min-h-[28px]">
+            <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+              {note.space && <TagChip label={note.space.name} variant="green" size="sm" />}
+              {note.tags?.slice(0, 2).map((tag) => (
+                <TagChip key={tag} label={tag} variant="blue" size="sm" />
+              ))}
+            </div>
+            <span className="w-24 flex-shrink-0" aria-hidden />
+          </div>
         )}
-        <p className="text-[10.5px] text-text-faint mt-2">{formatRelativeTime(note.updated_at)}</p>
+
+        {/* Two lines on mobile, one on desktop — never more. Without chips the
+            title is the top element, so it carries the gutter itself. */}
+        <p
+          className={`font-serif text-[15.5px] text-text-primary leading-snug line-clamp-2 md:line-clamp-1 ${
+            hasChips ? '' : 'pr-24'
+          }`}
+        >
+          {title}
+        </p>
+
+        {/* Always one line of subtext, ellipsised when it runs long. */}
+        <p className="text-[11.5px] text-text-muted leading-relaxed truncate mt-1">
+          {preview || 'No additional text'}
+        </p>
+
+        <p className="text-[10.5px] text-text-faint mt-2.5">{formatRelativeTime(note.updated_at)}</p>
       </Link>
 
       {/* Action buttons — top right */}
@@ -129,10 +149,11 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
             </button>
           </>
         ) : (
+          /* Card actions stay visible on touch and are hover-revealed on desktop. */
           <button
             onClick={handleDelete}
             title="Delete note"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint opacity-0 group-hover:opacity-100 hover:text-danger hover:bg-danger-bg transition-all duration-120"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-danger hover:bg-danger-bg transition-all duration-120"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
@@ -150,7 +171,7 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
                 className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-120 ${
                   open
                     ? 'text-accent-blue-dark bg-accent-blue-bg opacity-100'
-                    : 'text-text-faint opacity-0 group-hover:opacity-100 hover:text-text-secondary hover:bg-bg-surface'
+                    : 'text-text-faint opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-text-secondary hover:bg-bg-surface'
                 }`}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -168,8 +189,8 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
             title={pinned ? 'Unpin from home' : 'Pin to home'}
             className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-120 ${
               pinned
-                ? 'text-accent-blue-dark bg-accent-blue-bg opacity-100'
-                : 'text-text-faint opacity-0 group-hover:opacity-100 hover:text-text-secondary hover:bg-bg-surface'
+                ? 'text-accent-amber bg-accent-amber-bg opacity-100'
+                : 'text-text-faint opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-accent-amber hover:bg-accent-amber-bg'
             }`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

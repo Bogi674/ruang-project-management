@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Space } from '@/types';
 import { Logo } from './Logo';
 import { SpaceModal } from '@/components/spaces/SpaceModal';
 import { emitNotesChanged } from '@/lib/dnd';
+import { useSpaces } from '@/lib/spaces';
 
 interface MobileDrawerProps {
   open: boolean;
@@ -98,20 +99,13 @@ function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode }: Sp
 export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: MobileDrawerProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const { spaces, refresh: refreshSpaces } = useSpaces();
   const [manageMode, setManageMode] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalParent, setModalParent] = useState<{ id: string; name: string } | null>(null);
   const [editSpace, setEditSpace] = useState<Space | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const refreshSpaces = useCallback(() => {
-    fetch('/api/spaces')
-      .then((r) => r.json())
-      .then((d) => setSpaces(Array.isArray(d) ? d : []))
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (open) refreshSpaces();
@@ -159,7 +153,12 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/30 animate-fadeIn" onClick={onClose} />
-      <div className="fixed top-0 left-0 bottom-0 w-[280px] z-50 bg-bg-base flex flex-col animate-slideLeft shadow-modal">
+      {/* Wider than the old fixed 280px so the space rows and their manage
+          actions stop stacking into a tall, narrow column. */}
+      <div
+        className="fixed top-0 left-0 bottom-0 z-50 bg-bg-base flex flex-col animate-slideLeft shadow-modal"
+        style={{ width: 'min(88vw, 330px)' }}
+      >
         {/* Header — full logo lockup */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default flex-shrink-0">
           <Logo variant="text" height={24} />

@@ -13,7 +13,9 @@ import { KeyboardShortcutsPanel } from '@/components/layout/KeyboardShortcutsPan
 import { PreferencesProvider } from '@/lib/preferences';
 
 const SIDEBAR_WIDTH_KEY = 'ruang_sidebar_width';
-const SIDEBAR_DEFAULT_W = 208;
+// Wide enough that the sidebar reaches roughly the gap between the "Calendar"
+// and "My Room" tabs in the top navbar, which is where it reads as balanced.
+const SIDEBAR_DEFAULT_W = 280;
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -103,7 +105,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           />
           {/* Bottom tab bar stays visible inside the note editor so navigation
               is always reachable; padding matches the bar + safe-area inset. */}
-          <main className="pt-14 min-h-screen" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
+          <main className="pt-14 min-h-screen" style={{ paddingBottom: 'var(--tabbar-total)' }}>
             <div className="animate-fadeUp">{children}</div>
           </main>
           <MobileTabBar />

@@ -83,7 +83,9 @@ export function TipTapEditor({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {toolbarPosition === 'top' && toolbar}
-      <div className="flex-1 overflow-y-auto">
+      {/* Breathing room between the toolbar and the first line of prose — the
+          text used to start flush against the toolbar border. */}
+      <div className={`flex-1 overflow-y-auto ${toolbarPosition === 'top' ? 'pt-5 md:pt-6' : 'pb-5'}`}>
         <EditorContent editor={editor} className="tiptap-editor min-h-full" />
       </div>
       {toolbarPosition === 'bottom' && toolbar}

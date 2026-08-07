@@ -1,6 +1,6 @@
 export default function StoreroomLoading() {
   return (
-    <div className="px-11 py-9 max-w-[920px] animate-pulse">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[920px] animate-pulse">
       <div className="h-8 w-40 bg-border-default rounded-lg mb-6" />
       <div className="border border-border-default rounded-card overflow-hidden">
         {[1, 2, 3, 4, 5, 6].map(i => (

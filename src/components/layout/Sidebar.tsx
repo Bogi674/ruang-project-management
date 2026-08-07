@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Space } from '@/types';
 import { SpaceModal } from '@/components/spaces/SpaceModal';
+import { useSpaces } from '@/lib/spaces';
 import {
   isNoteDrag,
   getNoteDragData,
@@ -67,9 +68,15 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
 
   return (
     <li>
+      {/* The highlight lives on the whole row (chevron + label + actions) rather
+          than just the link, so an active space reads as a full-width band. */}
       <div
-        className={`flex items-center gap-1 group rounded-lg transition-colors duration-120 ${
-          dropActive ? 'ring-1 ring-accent-blue bg-accent-blue-bg' : ''
+        className={`flex items-center gap-1 pr-1 rounded-lg group transition-colors duration-120 ${
+          dropActive
+            ? 'ring-1 ring-accent-blue bg-accent-blue-bg'
+            : isActive
+            ? 'bg-accent-blue-bg'
+            : 'hover:bg-border-light'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={(e) => {
@@ -92,17 +99,15 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
         )}
         <Link
           href={`/space/${space.id}`}
-          className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
-            isActive
-              ? 'bg-accent-blue-bg text-accent-blue-dark'
-              : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
+          className={`flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
+            isActive ? 'text-accent-blue-dark' : 'text-text-secondary group-hover:text-text-primary'
           }`}
           style={{ fontWeight: isActive ? 580 : 400 }}
         >
           <span className="rounded-full flex-shrink-0" style={{ width: dotSize, height: dotSize, background: space.color || '#738290' }} />
           <span className="truncate">{space.icon && `${space.icon} `}{space.name}</span>
           {isPinned && (
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-accent-blue ml-auto opacity-70">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-accent-amber ml-auto">
               <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
             </svg>
           )}
@@ -169,7 +174,8 @@ interface SidebarProps {
 export function Sidebar({ width, onWidthChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  // Shared across the sidebar, the drawer, note lists and the editor.
+  const { spaces, refresh: refreshSpaces } = useSpaces();
   const [storeroomCount, setStoreroomCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [modalParent, setModalParent] = useState<{ id: string; name: string } | null>(null);
@@ -182,10 +188,6 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
   const [resizing, setResizing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const refreshSpaces = useCallback(() => {
-    fetch('/api/spaces').then((r) => r.json()).then((d) => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
-
   const refreshCount = useCallback(() => {
     fetch('/api/notes?storeroom=true&count=true')
       .then((r) => r.json())
@@ -195,8 +197,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
 
   useEffect(() => {
     setPinnedIdsState(getPinnedIds());
-    refreshSpaces();
-  }, [refreshSpaces]);
+  }, []);
 
   useEffect(() => { refreshCount(); }, [pathname, refreshCount]);
 
@@ -310,10 +311,10 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
         className="fixed top-[52px] left-0 h-[calc(100vh-52px)] bg-bg-subtle border-r border-border-default flex flex-col z-30"
         style={{ width }}
       >
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 space-y-5">
           {/* Storeroom — also a drop target for un-assigning a note */}
           <div>
-            <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint px-2 mb-1.5">Pinned</p>
+            <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint px-3 mb-1.5">Pinned</p>
             <Link
               href="/storeroom"
               onDragOver={(e) => {
@@ -329,7 +330,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
                 const payload = getNoteDragData(e);
                 if (payload && payload.fromSpaceId !== null) handleDropNote(null, payload.noteId);
               }}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
                 storeroomDropActive
                   ? 'ring-1 ring-accent-blue bg-accent-blue-bg text-accent-blue-dark'
                   : pathname === '/storeroom'
@@ -352,7 +353,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
 
           {/* Spaces */}
           <div>
-            <div className="flex items-center px-2 mb-1.5">
+            <div className="flex items-center px-3 mb-1.5">
               <p className="flex-1 text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint">Spaces</p>
               <button
                 onClick={openNewSpace}
@@ -365,7 +366,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
               </button>
             </div>
             {sortedSpaces.length === 0 && (
-              <p className="text-[11px] text-text-faint px-2">No spaces yet.</p>
+              <p className="text-[11px] text-text-faint px-3">No spaces yet.</p>
             )}
             <ul className="space-y-0.5">
               {sortedSpaces.map((space) => (
@@ -383,10 +384,10 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
         </div>
 
         {/* Settings */}
-        <div className="border-t border-border-default p-3 flex-shrink-0">
+        <div className="border-t border-border-default p-2 flex-shrink-0">
           <Link
             href="/settings"
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
               pathname?.startsWith('/settings')
                 ? 'bg-accent-blue-bg text-accent-blue-dark'
                 : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
@@ -403,7 +404,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
         {/* Resize handle */}
         <div
           onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
-          onDoubleClick={() => onWidthChange(208)}
+          onDoubleClick={() => onWidthChange(280)}
           className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize group ${
             resizing ? 'bg-accent-blue' : 'hover:bg-accent-blue/40'
           } transition-colors duration-120`}

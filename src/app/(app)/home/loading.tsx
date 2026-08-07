@@ -1,6 +1,6 @@
 export default function HomeLoading() {
   return (
-    <div className="px-11 py-9 max-w-[920px] animate-pulse">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[920px] animate-pulse">
       <div className="mb-8">
         <div className="h-8 w-48 bg-border-default rounded-lg mb-2" />
         <div className="h-3 w-32 bg-border-light rounded" />

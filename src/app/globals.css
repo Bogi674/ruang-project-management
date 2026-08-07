@@ -45,6 +45,23 @@
     --danger-bg: #fff4ee;
     --danger-border: #f8c8a8;
 
+    /* Accent: Amber — pinned stars only, so "pinned" is not another blue */
+    --accent-amber: #E8B23C;
+    --accent-amber-dark: #A9761A;
+    --accent-amber-bg: #FDF3DC;
+
+    /*
+     * Mobile chrome metrics. The tab bar and the FAB both derive from these,
+     * so the FAB can never land on top of the bar the way it did when each
+     * component hard-coded its own offset.
+     */
+    --tabbar-h: 56px;
+    --tabbar-total: calc(56px + env(safe-area-inset-bottom));
+    --fab-bottom: calc(var(--tabbar-total) + 16px);
+    /* Viewport minus the mobile header and the tab bar — used by full-height
+       screens (calendar) so they never scroll behind the chrome. */
+    --app-content-h: calc(100dvh - 56px - var(--tabbar-total));
+
     /* Shadows */
     --shadow-card: 0 1px 4px rgba(44,56,72,.04);
     --shadow-card-hover: 0 6px 20px rgba(44,56,72,.09);
@@ -52,6 +69,15 @@
     --shadow-fab: 0 4px 16px rgba(161,181,216,.4);
     --shadow-fab-hover: 0 8px 28px rgba(161,181,216,.5);
     --shadow-fab-menu: 0 8px 32px rgba(44,56,72,.13), 0 2px 6px rgba(44,56,72,.06);
+  }
+
+  /* Desktop has no tab bar, so the FAB sits on the plain 28px inset. */
+  @media (min-width: 768px) {
+    :root {
+      --tabbar-total: 0px;
+      --fab-bottom: 28px;
+      --app-content-h: calc(100vh - 52px);
+    }
   }
 
   * {
@@ -269,8 +295,54 @@
 .toolbar-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* Momentum scrolling + snap-free horizontal drag on touch. */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 .toolbar-scroll::-webkit-scrollbar { display: none; }
+
+/*
+ * Scroll affordance for the formatting toolbar: a soft fade on whichever side
+ * still has content, so it reads as a scrollable strip at a glance.
+ */
+.toolbar-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.toolbar-fade[data-visible='true'] { opacity: 1; }
+.toolbar-fade-left {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-base) 25%, rgba(255, 255, 255, 0));
+}
+.toolbar-fade-right {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-base) 25%, rgba(255, 255, 255, 0));
+}
+:root[data-theme='dark'] .toolbar-fade-left {
+  background: linear-gradient(to right, var(--bg-base) 25%, rgba(28, 33, 48, 0));
+}
+:root[data-theme='dark'] .toolbar-fade-right {
+  background: linear-gradient(to left, var(--bg-base) 25%, rgba(28, 33, 48, 0));
+}
+
+/* Chevron hint that sits on top of the fade while more toolbar remains. */
+.toolbar-hint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  pointer-events: none;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.toolbar-hint[data-visible='true'] { opacity: 1; }
 
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

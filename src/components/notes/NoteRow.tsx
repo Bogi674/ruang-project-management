@@ -131,8 +131,8 @@ export function NoteRow({
         title={pinned ? 'Unpin' : 'Pin to home'}
         className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-120 flex-shrink-0 ${
           pinned
-            ? 'text-accent-blue-dark bg-accent-blue-bg'
-            : 'text-text-faint opacity-0 group-hover:opacity-100 hover:text-text-secondary'
+            ? 'text-accent-amber bg-accent-amber-bg'
+            : 'text-text-faint opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-accent-amber'
         }`}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

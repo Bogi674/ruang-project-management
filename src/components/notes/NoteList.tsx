@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Note, Space } from '@/types';
+import { Note } from '@/types';
 import { NoteRow } from './NoteRow';
 import { flattenSpaces } from '@/components/spaces/SpaceAssignMenu';
 import { isNoteDrag, getNoteDragData, moveNoteToSpace, emitNotesChanged } from '@/lib/dnd';
+import { useSpaces } from '@/lib/spaces';
 
 interface NoteListProps {
   notes: Note[];
@@ -26,7 +27,7 @@ export function NoteList({
   const router = useRouter();
   const [items, setItems] = useState<Note[]>(notes);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const { spaces } = useSpaces();
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -34,10 +35,6 @@ export function NoteList({
 
   // Keep in sync when the server component re-renders with fresh data.
   useEffect(() => { setItems(notes); }, [notes]);
-
-  useEffect(() => {
-    fetch('/api/spaces').then(r => r.json()).then(d => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
 
   const isScoped = spaceId !== undefined;
 
