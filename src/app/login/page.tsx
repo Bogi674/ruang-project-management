@@ -32,7 +32,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[364px] flex flex-col gap-7">
         {/* Logo lockup */}
         <div className="flex flex-col items-center gap-3">
-          <Logo height={36} href="/login" />
+          <Logo variant="text" height={36} href="/login" />
           <p className="text-[13px] text-text-muted text-center">Your calm, focused personal workspace</p>
         </div>
 

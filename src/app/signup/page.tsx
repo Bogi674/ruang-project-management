@@ -70,7 +70,7 @@ export default function SignupPage() {
       <div className="w-full max-w-[364px] flex flex-col gap-7">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <Logo height={36} href="/signup" />
+          <Logo variant="text" height={36} href="/signup" />
           <p className="text-[13px] text-text-muted text-center">Create your personal workspace</p>
         </div>
 
