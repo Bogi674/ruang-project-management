@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { RuangLockup } from '@/components/layout/Logo';
+import { Logo } from '@/components/layout/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,7 +32,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[364px] flex flex-col gap-7">
         {/* Logo lockup */}
         <div className="flex flex-col items-center gap-3">
-          <RuangLockup size="lg" />
+          <Logo height={36} href="/login" />
           <p className="text-[13px] text-text-muted text-center">Your calm, focused personal workspace</p>
         </div>
 
