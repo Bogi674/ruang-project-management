@@ -4,11 +4,65 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const FAB_ITEMS = [
-  { label: 'Note', icon: '✏️', action: () => '/note/new' },
-  { label: 'To-do', icon: '✓', action: () => '/note/new?type=checklist' },
-  { label: 'Reminder', icon: '🔔', action: () => '/note/new?widget=reminder' },
-  { label: 'File Upload', icon: '📎', action: () => '/note/new?widget=file' },
-  { label: 'Link / Bookmark', icon: '🔗', action: () => '/note/new?widget=link' },
+  {
+    label: 'Note',
+    href: '/note/new',
+    bg: '#dce8f6',
+    color: '#4a6090',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+    ),
+  },
+  {
+    label: 'To-do',
+    href: '/note/new?type=checklist',
+    bg: '#E4F0D0',
+    color: '#4a6a40',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 11 12 14 22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+    ),
+  },
+  {
+    label: 'Reminder',
+    href: '/note/new?widget=reminder',
+    bg: '#EDF3FA',
+    color: '#738290',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    ),
+  },
+  {
+    label: 'File Upload',
+    href: '/note/new?widget=file',
+    bg: '#EDF3FA',
+    color: '#738290',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+      </svg>
+    ),
+  },
+  {
+    label: 'Link / Bookmark',
+    href: '/note/new?widget=link',
+    bg: '#EDF3FA',
+    color: '#738290',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+    ),
+  },
 ];
 
 export function FAB() {
@@ -31,10 +85,13 @@ export function FAB() {
           {FAB_ITEMS.map((item) => (
             <button
               key={item.label}
-              onClick={() => { setOpen(false); router.push(item.action()); }}
+              onClick={() => { setOpen(false); router.push(item.href); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-subtle transition-colors duration-120 text-left"
             >
-              <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-elevated text-base flex-shrink-0">
+              <span
+                className="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0"
+                style={{ background: item.bg, color: item.color }}
+              >
                 {item.icon}
               </span>
               <span className="text-13 text-text-primary">{item.label}</span>

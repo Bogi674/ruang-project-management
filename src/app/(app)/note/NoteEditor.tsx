@@ -41,6 +41,7 @@ function defaultTitle(createdAt?: string): string {
 export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFirstEdit }: NoteEditorProps) {
   const router = useRouter();
   const hasCalledFirstEdit = useRef(false);
+  const widgetInitRef = useRef(false);
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -60,7 +61,10 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   const createdAt = initialNote?.created_at || new Date().toISOString();
 
   useEffect(() => {
-    if (initialWidgetType) handleAddWidget(initialWidgetType);
+    if (initialWidgetType && !widgetInitRef.current) {
+      widgetInitRef.current = true;
+      handleAddWidget(initialWidgetType);
+    }
     fetch('/api/spaces').then(r => r.json()).then(d => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
