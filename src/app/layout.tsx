@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: 'Your personal note space',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/icon-192.png',
+    icon: '/logo/ruang_logo.png',
+    apple: '/logo/ruang_logo.png',
   },
   appleWebApp: {
     capable: true,
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400&display=swap"
           rel="stylesheet"
         />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/logo/ruang_logo.png" />
       </head>
       <body>
         <Providers>{children}</Providers>

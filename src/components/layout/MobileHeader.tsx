@@ -42,7 +42,7 @@ export function MobileHeader({ inNote, noteTitle, onHamburger, userName = '', us
         </svg>
       </button>
       <div className="flex-1 flex justify-center">
-        <Logo size="sm" />
+        <Logo variant="text" height={22} />
       </div>
       <div className="flex items-center gap-2">
         <NotificationBell />
