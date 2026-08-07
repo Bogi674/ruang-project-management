@@ -30,7 +30,7 @@ export function TopNavbar({ autosaveState, userName = '', userImage, focusMode, 
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 h-[52px] bg-bg-base border-b border-border-default flex items-center px-5 gap-6">
-      <Logo size="md" markOnly />
+      <Logo size="sm" />
 
       {!focusMode && (
         <nav className="flex items-center gap-1 ml-2">
