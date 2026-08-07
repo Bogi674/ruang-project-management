@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WidgetType } from '@/types';
 import { NoteEditor } from '../NoteEditor';
@@ -12,8 +12,12 @@ export default function NewNotePage() {
   const initialWidget = params.get('widget') as WidgetType | null;
   const [noteId, setNoteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(true);
+  const createdRef = useRef(false);
 
   useEffect(() => {
+    if (createdRef.current) return;
+    createdRef.current = true;
+
     fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -28,7 +32,7 @@ export default function NewNotePage() {
         }
       })
       .catch(() => router.replace('/home'));
-  }, [type, router]);
+  }, []);
 
   if (creating || !noteId) {
     return (

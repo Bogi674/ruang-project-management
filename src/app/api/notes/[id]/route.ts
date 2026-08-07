@@ -31,11 +31,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     updates.content = body.content;
     updates.title = extractTitleFromTipTap(body.content);
   }
+  if ('title' in body && body.title !== undefined) updates.title = body.title;
   if ('space_id' in body) updates.space_id = body.space_id;
   if ('is_pinned_to_home' in body) updates.is_pinned_to_home = body.is_pinned_to_home;
   if ('pinned_date' in body) updates.pinned_date = body.pinned_date;
   if ('tags' in body) updates.tags = body.tags;
   if ('is_locked' in body) updates.is_locked = body.is_locked;
+  if ('avatar_url' in body) updates.avatar_url = body.avatar_url;
 
   const { data, error: dbError } = await db
     .from('notes')

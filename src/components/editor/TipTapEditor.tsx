@@ -20,9 +20,18 @@ interface TipTapEditorProps {
   placeholder?: string;
   editable?: boolean;
   onAddWidget?: () => void;
+  toolbarPosition?: 'top' | 'bottom';
 }
 
-export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'Start writing…', editable = true, onAddWidget }: TipTapEditorProps) {
+export function TipTapEditor({
+  content,
+  isChecklist,
+  onChange,
+  placeholder = 'Start writing…',
+  editable = true,
+  onAddWidget,
+  toolbarPosition = 'bottom',
+}: TipTapEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ strike: false }),
@@ -60,12 +69,17 @@ export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'St
 
   if (!editor) return null;
 
+  const toolbar = editable && (
+    <FormattingToolbar editor={editor} onAddWidget={onAddWidget} />
+  );
+
   return (
     <div className="flex flex-col flex-1">
+      {toolbarPosition === 'top' && toolbar}
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="tiptap-editor min-h-full" />
       </div>
-      {editable && <FormattingToolbar editor={editor} onAddWidget={onAddWidget} />}
+      {toolbarPosition === 'bottom' && toolbar}
     </div>
   );
 }

@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const db = createServerClient();
-  const allowed = ['name', 'accent_color', 'typography_preference', 'surface_preference', 'density_preference', 'landing_page_preference', 'theme_preference'];
+  const allowed = ['name', 'avatar_url', 'accent_color', 'typography_preference', 'surface_preference', 'density_preference', 'landing_page_preference', 'theme_preference'];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];

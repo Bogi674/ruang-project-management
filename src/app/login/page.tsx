@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { RuangLockup } from '@/components/layout/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,14 +30,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-bg-page flex items-center justify-center p-8">
       <div className="w-full max-w-[364px] flex flex-col gap-7">
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-2">
-          <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
-            <polygon points="16,3 29,27 3,27" fill="rgba(115,130,144,0.18)" stroke="#738290" strokeWidth="1.5" strokeLinejoin="round" />
-            <line x1="16" y1="3" x2="16" y2="27" stroke="#738290" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="9.5" y1="18" x2="22.5" y2="18" stroke="#738290" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-          <span className="font-serif text-[28px] text-text-primary tracking-[0.08em]">ruang</span>
+        {/* Logo lockup */}
+        <div className="flex flex-col items-center gap-3">
+          <RuangLockup size="lg" />
           <p className="text-[13px] text-text-muted text-center">Your calm, focused personal workspace</p>
         </div>
 
@@ -47,7 +44,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-12 px-4 rounded-input border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
+            className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
           />
           <div className="flex flex-col gap-1">
             <input
@@ -56,21 +53,21 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="h-12 px-4 rounded-input border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
+              className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
             />
             <div className="flex justify-end">
               <button type="button" className="text-[12px] text-text-muted hover:text-text-secondary transition-colors duration-120">
-                Forgot?
+                Forgot password?
               </button>
             </div>
           </div>
 
-          {error && <p className="text-12 text-danger text-center">{error}</p>}
+          {error && <p className="text-[12px] text-danger text-center">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="h-12 rounded-input bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120 disabled:opacity-60"
+            className="h-12 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120 disabled:opacity-60"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
@@ -79,14 +76,14 @@ export default function LoginPage() {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-border-default" />
-          <span className="text-12 text-text-muted">or</span>
+          <span className="text-[12px] text-text-muted">or</span>
           <div className="flex-1 h-px bg-border-default" />
         </div>
 
         {/* Google */}
         <button
           onClick={handleGoogle}
-          className="h-12 rounded-input border border-border-medium flex items-center justify-center gap-3 text-[14px] text-text-primary hover:bg-bg-surface transition-colors duration-120"
+          className="h-12 rounded-[10px] border border-border-medium flex items-center justify-center gap-3 text-[14px] text-text-primary hover:bg-bg-surface transition-colors duration-120"
         >
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -97,9 +94,11 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="text-center text-12 text-text-muted">
+        <p className="text-center text-[12px] text-text-muted">
           Don&apos;t have an account?{' '}
-          <button className="text-accent-blue-dark underline underline-offset-2">Sign up</button>
+          <Link href="/signup" className="text-accent-blue-dark underline underline-offset-2">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>
