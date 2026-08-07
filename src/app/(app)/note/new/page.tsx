@@ -12,35 +12,48 @@ export default function NewNotePage() {
   const initialWidget = params.get('widget') as WidgetType | null;
   const [noteId, setNoteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(true);
-  const createdRef = useRef(false);
   const hasEditedRef = useRef(false);
-  const noteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (createdRef.current) return;
-    createdRef.current = true;
+    const controller = new AbortController();
+    // Track the note ID at closure scope so cleanup can access it
+    // even if the component unmounts before the fetch resolves.
+    let resolvedNoteId: string | null = null;
 
     fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type }),
+      signal: controller.signal,
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.id) {
-          setNoteId(data.id);
-          noteIdRef.current = data.id;
-          setCreating(false);
-          window.history.replaceState(null, '', `/note/${data.id}`);
+        if (!data.id) return;
+        resolvedNoteId = data.id;
+
+        // If the cleanup already fired (Strict Mode remount or fast navigation),
+        // delete the orphaned note instead of showing it.
+        if (controller.signal.aborted) {
+          fetch(`/api/notes/${data.id}`, { method: 'DELETE', keepalive: true });
+          return;
         }
+
+        setNoteId(data.id);
+        setCreating(false);
+        window.history.replaceState(null, '', `/note/${data.id}`);
       })
-      .catch(() => router.replace('/home'));
+      .catch((err) => {
+        if (err.name !== 'AbortError') router.replace('/home');
+      });
 
     return () => {
-      if (!hasEditedRef.current && noteIdRef.current) {
-        fetch(`/api/notes/${noteIdRef.current}`, { method: 'DELETE', keepalive: true });
+      controller.abort();
+      // If the fetch already resolved before cleanup fired, delete the note.
+      if (resolvedNoteId && !hasEditedRef.current) {
+        fetch(`/api/notes/${resolvedNoteId}`, { method: 'DELETE', keepalive: true });
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFirstEdit = useCallback(() => {
