@@ -20,7 +20,7 @@ export function RuangMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
       aria-label="Ruang mark"
     >
       <polygon
-        points="46,6 50,73 5,106"
+        points="43,6 53,6 50,73 5,106"
         style={{ fill: 'var(--logo-fill, #d4d4d4)' }}
       />
       <line x1="50" y1="6" x2="50" y2="73" style={{ stroke: 'var(--logo-stroke, #2c3848)' }} strokeWidth="7" strokeLinecap="round" />
