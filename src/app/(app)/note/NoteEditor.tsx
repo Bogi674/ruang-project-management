@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Note, Widget, WidgetType, AutosaveState, Space } from '@/types';
+import { Note, Widget, AutosaveState, Space, WidgetType } from '@/types';
 import { TipTapEditor } from '@/components/editor/TipTapEditor';
 import { VersionHistory } from '@/components/editor/VersionHistory';
 import { WidgetPicker } from '@/components/widgets/WidgetPicker';
@@ -18,7 +18,6 @@ interface NoteEditorProps {
   noteId: string;
   initialNote?: Note;
   isNew?: boolean;
-  initialWidgetType?: WidgetType | null;
   onFirstEdit?: () => void;
 }
 
@@ -38,10 +37,9 @@ function defaultTitle(createdAt?: string): string {
   return `Untitled ${days[d.getDay()]}, ${pad(d.getDate())} ${months[d.getMonth()]}, ${d.getFullYear()}`;
 }
 
-export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFirstEdit }: NoteEditorProps) {
+export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEditorProps) {
   const router = useRouter();
   const hasCalledFirstEdit = useRef(false);
-  const widgetInitRef = useRef(false);
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -61,10 +59,6 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   const createdAt = initialNote?.created_at || new Date().toISOString();
 
   useEffect(() => {
-    if (initialWidgetType && !widgetInitRef.current) {
-      widgetInitRef.current = true;
-      handleAddWidget(initialWidgetType);
-    }
     fetch('/api/spaces').then(r => r.json()).then(d => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 

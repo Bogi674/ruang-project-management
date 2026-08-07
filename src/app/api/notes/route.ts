@@ -34,12 +34,30 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const db = createServerClient();
-  const { data, error: dbError } = await db
+
+  const { data: note, error: dbError } = await db
     .from('notes')
     .insert({ user_id: userId!, type: body.type || 'note', space_id: body.space_id || null, tags: [] })
     .select()
     .single();
 
-  if (dbError) return apiError(dbError.message);
-  return NextResponse.json(data, { status: 201 });
+  if (dbError || !note) return apiError(dbError?.message ?? 'Failed to create note');
+
+  // Optionally create an initial widget in the same request so the FAB
+  // only ever makes one round trip regardless of content type.
+  if (body.widget) {
+    const widgetType = body.widget as string;
+    const defaultContent =
+      widgetType === 'reminder'
+        ? { title: '', date: null, time: null, recurrence: 'once', type_label: 'Deadline' }
+        : widgetType === 'file'
+        ? { description: '' }
+        : { url: '', og_title: '', og_description: '', og_image: null, note: '' };
+
+    await db
+      .from('widgets')
+      .insert({ user_id: userId!, note_id: note.id, type: widgetType, content: defaultContent });
+  }
+
+  return NextResponse.json(note, { status: 201 });
 }

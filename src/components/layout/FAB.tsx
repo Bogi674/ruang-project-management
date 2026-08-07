@@ -3,10 +3,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-const FAB_ITEMS = [
+type NoteType = 'note' | 'checklist';
+type WidgetType = 'reminder' | 'file' | 'link';
+
+interface FabEntry {
+  label: string;
+  noteType: NoteType;
+  widget?: WidgetType;
+  bg: string;
+  color: string;
+  icon: React.ReactNode;
+}
+
+const FAB_ITEMS: FabEntry[] = [
   {
     label: 'Note',
-    href: '/note/new',
+    noteType: 'note',
     bg: '#dce8f6',
     color: '#4a6090',
     icon: (
@@ -18,7 +30,7 @@ const FAB_ITEMS = [
   },
   {
     label: 'To-do',
-    href: '/note/new?type=checklist',
+    noteType: 'checklist',
     bg: '#E4F0D0',
     color: '#4a6a40',
     icon: (
@@ -30,7 +42,8 @@ const FAB_ITEMS = [
   },
   {
     label: 'Reminder',
-    href: '/note/new?widget=reminder',
+    noteType: 'note',
+    widget: 'reminder',
     bg: '#EDF3FA',
     color: '#738290',
     icon: (
@@ -42,7 +55,8 @@ const FAB_ITEMS = [
   },
   {
     label: 'File Upload',
-    href: '/note/new?widget=file',
+    noteType: 'note',
+    widget: 'file',
     bg: '#EDF3FA',
     color: '#738290',
     icon: (
@@ -53,7 +67,8 @@ const FAB_ITEMS = [
   },
   {
     label: 'Link / Bookmark',
-    href: '/note/new?widget=link',
+    noteType: 'note',
+    widget: 'link',
     bg: '#EDF3FA',
     color: '#738290',
     icon: (
@@ -67,6 +82,7 @@ const FAB_ITEMS = [
 
 export function FAB() {
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -78,14 +94,43 @@ export function FAB() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Creation happens here, in a click handler, never in a useEffect.
+  // This is the single source of truth for all note/widget creation.
+  async function handleCreate(item: FabEntry) {
+    if (creating) return;
+    setOpen(false);
+    setCreating(true);
+
+    try {
+      const body: Record<string, string> = { type: item.noteType };
+      if (item.widget) body.widget = item.widget;
+
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('Creation failed');
+      const data = await res.json();
+      if (data.id) router.push(`/note/${data.id}`);
+    } catch {
+      // silent fail - FAB resets so user can retry
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const isLoading = creating;
+
   return (
     <div ref={ref} className="fixed z-50 md:bottom-7 md:right-7 bottom-[84px] right-5">
-      {open && (
+      {open && !isLoading && (
         <div className="absolute bottom-[68px] right-0 bg-bg-base border border-border-default rounded-[14px] shadow-fab-menu p-2 w-52 animate-fadeUp">
           {FAB_ITEMS.map((item) => (
             <button
               key={item.label}
-              onClick={() => { setOpen(false); router.push(item.href); }}
+              onClick={() => handleCreate(item)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-subtle transition-colors duration-120 text-left"
             >
               <span
@@ -99,18 +144,34 @@ export function FAB() {
           ))}
         </div>
       )}
+
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => !isLoading && setOpen(!open)}
         className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-fab hover:shadow-fab-hover transition-all duration-150"
         style={{
-          background: open ? '#738290' : '#A1B5D8',
-          transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
+          background: isLoading ? '#738290' : open ? '#738290' : '#A1B5D8',
+          transform: open && !isLoading ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
-        aria-label="Create"
+        aria-label={isLoading ? 'Creating...' : 'Create'}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
+        {isLoading ? (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="animate-spin"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+        ) : (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        )}
       </button>
     </div>
   );
