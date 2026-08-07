@@ -272,3 +272,15 @@
 
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Logo theme tokens */
+:root {
+  --logo-stroke: #1a1a1a;
+  --logo-fill: #d4d4d4;
+  --logo-text: #1a1a1a;
+}
+:root[data-theme="dark"] {
+  --logo-stroke: #ffffff;
+  --logo-fill: rgba(255,255,255,0.18);
+  --logo-text: #ffffff;
+}

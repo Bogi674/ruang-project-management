@@ -33,11 +33,12 @@ function ToolbarDivider() {
 interface FormattingToolbarProps {
   editor: Editor;
   onAddWidget?: () => void;
+  position?: 'top' | 'bottom';
 }
 
-export function FormattingToolbar({ editor, onAddWidget }: FormattingToolbarProps) {
+export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: FormattingToolbarProps) {
   return (
-    <div className="border-t border-border-default bg-bg-base h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll flex-shrink-0">
+    <div className={`${position === 'top' ? 'border-b' : 'border-t'} border-border-default bg-bg-base h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll flex-shrink-0`}>
       <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
       </ToolbarButton>
