@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Note } from '@/types';
 import { formatRelativeTime, extractTitleFromTipTap } from '@/lib/utils';
 import { TagChip } from './TagChip';
+import { SpaceAssignMenu } from '@/components/spaces/SpaceAssignMenu';
+import { setNoteDragData, moveNoteToSpace, emitNotesChanged } from '@/lib/dnd';
 
 function getPreview(content: object | null): string {
   if (!content) return '';
@@ -32,6 +34,16 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
   const [pinning, setPinning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const currentSpaceId = note.space_id ?? note.space?.id ?? null;
+
+  async function handleAssignSpace(nextSpaceId: string | null) {
+    if (nextSpaceId === currentSpaceId) return;
+    const ok = await moveNoteToSpace(note.id, nextSpaceId);
+    if (!ok) return;
+    emitNotesChanged();
+    router.refresh();
+  }
 
   async function handlePin(e: React.MouseEvent) {
     e.preventDefault();
@@ -60,6 +72,7 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
     setDeleting(true);
     await fetch(`/api/notes/${note.id}`, { method: 'DELETE' });
     onDelete?.(note.id);
+    emitNotesChanged();
     router.refresh();
   }
 
@@ -71,7 +84,15 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
 
   return (
     <div
-      className="relative group bg-bg-base border border-border-default rounded-card shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-150"
+      draggable
+      onDragStart={(e) => {
+        setNoteDragData(e, { noteId: note.id, fromSpaceId: currentSpaceId });
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
+      className={`relative group bg-bg-base border border-border-default rounded-card shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-150 ${
+        dragging ? 'opacity-40' : ''
+      }`}
       onMouseLeave={() => setConfirmDelete(false)}
     >
       <Link href={`/note/${note.id}`} className="block no-underline p-4 cursor-pointer">
@@ -117,6 +138,27 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
             </svg>
           </button>
+        )}
+
+        {/* Move to space */}
+        {!confirmDelete && (
+          <SpaceAssignMenu currentSpaceId={currentSpaceId} onSelect={handleAssignSpace}>
+            {({ onClick, open }) => (
+              <button
+                onClick={onClick}
+                title="Move to space"
+                className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-120 ${
+                  open
+                    ? 'text-accent-blue-dark bg-accent-blue-bg opacity-100'
+                    : 'text-text-faint opacity-0 group-hover:opacity-100 hover:text-text-secondary hover:bg-bg-surface'
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.6l-1.7-2.3A1 1 0 0 0 9.9 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z"/>
+                </svg>
+              </button>
+            )}
+          </SpaceAssignMenu>
         )}
 
         {/* Pin */}

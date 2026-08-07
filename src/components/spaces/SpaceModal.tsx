@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Space } from '@/types';
 
 const COLOR_PRESETS = [
   '#738290', '#A1B5D8', '#7eb87e', '#d4a574', '#d4879a',
@@ -14,12 +15,15 @@ interface SpaceModalProps {
   onCreated: () => void;
   parentId?: string | null;
   parentName?: string | null;
+  /** When provided the modal edits this space instead of creating a new one. */
+  editSpace?: Space | null;
 }
 
-export function SpaceModal({ onClose, onCreated, parentId, parentName }: SpaceModalProps) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState('#738290');
-  const [icon, setIcon] = useState('');
+export function SpaceModal({ onClose, onCreated, parentId, parentName, editSpace }: SpaceModalProps) {
+  const isEdit = !!editSpace;
+  const [name, setName] = useState(editSpace?.name || '');
+  const [color, setColor] = useState(editSpace?.color || '#738290');
+  const [icon, setIcon] = useState(editSpace?.icon || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,18 +32,24 @@ export function SpaceModal({ onClose, onCreated, parentId, parentName }: SpaceMo
     if (!name.trim()) { setError('Name is required.'); return; }
     setSaving(true);
     setError('');
-    const res = await fetch('/api/spaces', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), color, icon: icon || null, parent_id: parentId || null }),
-    });
+    const res = isEdit
+      ? await fetch(`/api/spaces/${editSpace!.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), color, icon: icon || null }),
+        })
+      : await fetch('/api/spaces', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), color, icon: icon || null, parent_id: parentId || null }),
+        });
     setSaving(false);
     if (res.ok) {
       onCreated();
       onClose();
     } else {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Failed to create space.');
+      setError(data.error || `Failed to ${isEdit ? 'update' : 'create'} space.`);
     }
   }
 
@@ -52,7 +62,7 @@ export function SpaceModal({ onClose, onCreated, parentId, parentName }: SpaceMo
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-serif text-[18px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>
-            {parentName ? `New space in ${parentName}` : 'New space'}
+            {isEdit ? 'Edit space' : parentName ? `New space in ${parentName}` : 'New space'}
           </h2>
           <button
             onClick={onClose}
@@ -154,7 +164,7 @@ export function SpaceModal({ onClose, onCreated, parentId, parentName }: SpaceMo
               disabled={saving || !name.trim()}
               className="flex-1 h-11 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors disabled:opacity-60"
             >
-              {saving ? 'Creating…' : 'Create space'}
+              {saving ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save changes' : 'Create space'}
             </button>
           </div>
         </form>
