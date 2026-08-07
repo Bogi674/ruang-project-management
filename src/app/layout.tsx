@@ -21,6 +21,10 @@ export const viewport: Viewport = {
   themeColor: '#A1B5D8',
   width: 'device-width',
   initialScale: 1,
+  // Stops iOS Safari from auto-zooming when a field is focused, which made the
+  // note editor jump in and out of zoom while typing.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
 };
 

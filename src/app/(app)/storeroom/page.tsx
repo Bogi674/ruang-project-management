@@ -53,7 +53,7 @@ export default async function StoreroomPage({ searchParams }: { searchParams: Se
       </div>
 
       <div className="bg-bg-base border border-border-default rounded-card overflow-hidden">
-        <NoteList notes={items} emptyMessage="Nothing here. That's a good sign." showAssign />
+        <NoteList notes={items} emptyMessage="Nothing here. That's a good sign." spaceId={null} />
       </div>
     </div>
   );

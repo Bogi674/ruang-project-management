@@ -1,10 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Space } from '@/types';
 import { SpaceModal } from '@/components/spaces/SpaceModal';
+import {
+  isNoteDrag,
+  getNoteDragData,
+  moveNoteToSpace,
+  emitNotesChanged,
+  NOTES_CHANGED_EVENT,
+} from '@/lib/dnd';
 
 const PINNED_KEY = 'ruang_pinned_spaces';
 
@@ -15,43 +23,65 @@ function setPinnedIds(ids: string[]) {
   localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
 }
 
+interface MenuState {
+  space: Space;
+  top: number;
+  left: number;
+}
+
 interface SpaceItemProps {
   space: Space;
   level?: number;
   pinnedIds: string[];
   onNewChild: (id: string, name: string) => void;
-  onRefresh: () => void;
-  onPinToggle: (id: string) => void;
-  onDelete: (id: string, name: string) => void;
+  onOpenMenu: (space: Space, anchor: HTMLElement) => void;
+  onDropNote: (spaceId: string, noteId: string) => void;
 }
 
-function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onRefresh, onPinToggle, onDelete }: SpaceItemProps) {
+function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDropNote }: SpaceItemProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const hasChildren = space.children && space.children.length > 0;
+  const [dropActive, setDropActive] = useState(false);
+  const hasChildren = !!space.children && space.children.length > 0;
   const dotSize = level === 0 ? 7 : level === 1 ? 6 : 5;
   const canAddChild = (space.depth ?? 0) < 2;
   const isPinned = pinnedIds.includes(space.id);
+  const isActive = pathname === `/space/${space.id}`;
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
+  function handleDragOver(e: React.DragEvent) {
+    if (!isNoteDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropActive(true);
+    // Auto-expand so the user can drop into a nested space mid-drag.
+    if (hasChildren && !open) setOpen(true);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropActive(false);
+    const payload = getNoteDragData(e);
+    if (payload && payload.fromSpaceId !== space.id) onDropNote(space.id, payload.noteId);
+  }
 
   return (
     <li>
-      <div className="flex items-center gap-1 group">
+      <div
+        className={`flex items-center gap-1 group rounded-lg transition-colors duration-120 ${
+          dropActive ? 'ring-1 ring-accent-blue bg-accent-blue-bg' : ''
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropActive(false);
+        }}
+        onDrop={handleDrop}
+      >
         {hasChildren ? (
           <button
             onClick={() => setOpen(!open)}
             className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text-secondary flex-shrink-0"
+            aria-label={open ? 'Collapse' : 'Expand'}
           >
             <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" style={{ transform: open ? 'rotate(90deg)' : '', transition: 'transform 0.12s' }}>
               <path d="M2 1l4 3-4 3V1z" />
@@ -62,12 +92,12 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onRefresh, onPinTo
         )}
         <Link
           href={`/space/${space.id}`}
-          className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
-            pathname === `/space/${space.id}`
+          className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
+            isActive
               ? 'bg-accent-blue-bg text-accent-blue-dark'
               : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
           }`}
-          style={{ fontWeight: pathname === `/space/${space.id}` ? 580 : 400 }}
+          style={{ fontWeight: isActive ? 580 : 400 }}
         >
           <span className="rounded-full flex-shrink-0" style={{ width: dotSize, height: dotSize, background: space.color || '#738290' }} />
           <span className="truncate">{space.icon && `${space.icon} `}{space.name}</span>
@@ -79,7 +109,7 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onRefresh, onPinTo
         </Link>
 
         {/* Hover actions */}
-        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+        <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all flex-shrink-0">
           {canAddChild && (
             <button
               onClick={() => onNewChild(space.id, space.name)}
@@ -91,44 +121,15 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onRefresh, onPinTo
               </svg>
             </button>
           )}
-          {/* Space menu */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen(v => !v)}
-              className="w-5 h-5 flex items-center justify-center text-text-faint hover:text-text-secondary"
-              title="Space options"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-              </svg>
-            </button>
-            {menuOpen && (
-              <div
-                className="absolute left-full top-0 ml-1 w-40 bg-bg-base border border-border-default rounded-[10px] py-1 z-50"
-                style={{ boxShadow: '0 8px 24px rgba(44,56,72,.12)' }}
-              >
-                <button
-                  onClick={() => { onPinToggle(space.id); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-                  </svg>
-                  {isPinned ? 'Unpin from top' : 'Pin to top'}
-                </button>
-                <div className="h-px bg-border-light mx-2 my-1" />
-                <button
-                  onClick={() => { onDelete(space.id, space.name); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-[12px] text-danger hover:bg-danger-bg transition-colors flex items-center gap-2"
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                  </svg>
-                  Delete space
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={(e) => onOpenMenu(space, e.currentTarget)}
+            className="w-5 h-5 flex items-center justify-center text-text-faint hover:text-text-secondary"
+            title="Space options"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+            </svg>
+          </button>
         </div>
       </div>
       {open && hasChildren && (
@@ -140,9 +141,8 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onRefresh, onPinTo
               level={level + 1}
               pinnedIds={pinnedIds}
               onNewChild={onNewChild}
-              onRefresh={onRefresh}
-              onPinToggle={onPinToggle}
-              onDelete={onDelete}
+              onOpenMenu={onOpenMenu}
+              onDropNote={onDropNote}
             />
           ))}
         </ul>
@@ -158,39 +158,104 @@ interface DeleteConfirm {
   childCount: number;
 }
 
-export function Sidebar() {
+const MIN_W = 176;
+const MAX_W = 420;
+
+interface SidebarProps {
+  width: number;
+  onWidthChange: (w: number) => void;
+}
+
+export function Sidebar({ width, onWidthChange }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [storeroomCount, setStoreroomCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [modalParent, setModalParent] = useState<{ id: string; name: string } | null>(null);
+  const [editSpace, setEditSpace] = useState<Space | null>(null);
   const [pinnedIds, setPinnedIdsState] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [storeroomDropActive, setStoreroomDropActive] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const refreshSpaces = () => {
+  const refreshSpaces = useCallback(() => {
     fetch('/api/spaces').then((r) => r.json()).then((d) => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
-  };
+  }, []);
 
-  useEffect(() => {
-    setPinnedIdsState(getPinnedIds());
-    refreshSpaces();
+  const refreshCount = useCallback(() => {
     fetch('/api/notes?storeroom=true&count=true')
       .then((r) => r.json())
       .then((d) => setStoreroomCount(d?.count || 0))
       .catch(() => {});
   }, []);
 
-  // Only refresh storeroom count on navigation
   useEffect(() => {
-    fetch('/api/notes?storeroom=true&count=true')
-      .then((r) => r.json())
-      .then((d) => setStoreroomCount(d?.count || 0))
-      .catch(() => {});
-  }, [pathname]);
+    setPinnedIdsState(getPinnedIds());
+    refreshSpaces();
+  }, [refreshSpaces]);
 
-  function openNewSpace() { setModalParent(null); setShowModal(true); }
-  function openNewChild(id: string, name: string) { setModalParent({ id, name }); setShowModal(true); }
+  useEffect(() => { refreshCount(); }, [pathname, refreshCount]);
+
+  // Refresh the badge when a note is moved or deleted anywhere in the app.
+  useEffect(() => {
+    function onChanged() { refreshCount(); }
+    window.addEventListener(NOTES_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(NOTES_CHANGED_EVENT, onChanged);
+  }, [refreshCount]);
+
+  // Close the space menu on outside click / escape / scroll.
+  useEffect(() => {
+    if (!menu) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMenu(null); }
+    function close() { setMenu(null); }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+    };
+  }, [menu]);
+
+  // ── Resize handle ──
+  useEffect(() => {
+    if (!resizing) return;
+    function onMove(e: MouseEvent) {
+      onWidthChange(Math.min(MAX_W, Math.max(MIN_W, e.clientX)));
+    }
+    function onUp() { setResizing(false); }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    // Keep the cursor consistent and stop text selection while dragging.
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizing, onWidthChange]);
+
+  function openNewSpace() { setEditSpace(null); setModalParent(null); setShowModal(true); }
+  function openNewChild(id: string, name: string) { setEditSpace(null); setModalParent({ id, name }); setShowModal(true); }
+
+  function openMenu(space: Space, anchor: HTMLElement) {
+    const rect = anchor.getBoundingClientRect();
+    const MENU_H = 190;
+    const top = rect.bottom + MENU_H > window.innerHeight
+      ? Math.max(8, rect.top - MENU_H)
+      : rect.bottom + 4;
+    setMenu({ space, top, left: Math.min(rect.left, window.innerWidth - 180) });
+  }
 
   function handlePinToggle(id: string) {
     const current = getPinnedIds();
@@ -204,9 +269,9 @@ export function Sidebar() {
     if (!res.ok) return;
     const { noteCount, childCount } = await res.json();
     if (noteCount === 0 && childCount === 0) {
-      // Empty space — delete immediately
       await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
       refreshSpaces();
+      if (pathname === `/space/${id}`) router.push('/storeroom');
     } else {
       setDeleteConfirm({ id, name, noteCount, childCount });
     }
@@ -216,12 +281,23 @@ export function Sidebar() {
     if (!deleteConfirm) return;
     setDeleting(true);
     await fetch(`/api/spaces/${deleteConfirm.id}`, { method: 'DELETE' });
+    const deletedId = deleteConfirm.id;
     setDeleteConfirm(null);
     setDeleting(false);
     refreshSpaces();
+    refreshCount();
+    if (pathname === `/space/${deletedId}`) router.push('/storeroom');
+    else router.refresh();
   }
 
-  // Sort pinned spaces to top
+  async function handleDropNote(spaceId: string | null, noteId: string) {
+    const ok = await moveNoteToSpace(noteId, spaceId);
+    if (!ok) return;
+    refreshCount();
+    emitNotesChanged();
+    router.refresh();
+  }
+
   const sortedSpaces = [...spaces].sort((a, b) => {
     const aPin = pinnedIds.includes(a.id) ? 0 : 1;
     const bPin = pinnedIds.includes(b.id) ? 0 : 1;
@@ -230,26 +306,44 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed top-[52px] left-0 w-[208px] h-[calc(100vh-52px)] bg-bg-subtle border-r border-border-default flex flex-col overflow-hidden z-30">
-        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-          {/* Storeroom */}
+      <aside
+        className="fixed top-[52px] left-0 h-[calc(100vh-52px)] bg-bg-subtle border-r border-border-default flex flex-col z-30"
+        style={{ width }}
+      >
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5">
+          {/* Storeroom — also a drop target for un-assigning a note */}
           <div>
             <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint px-2 mb-1.5">Pinned</p>
             <Link
               href="/storeroom"
+              onDragOver={(e) => {
+                if (!isNoteDrag(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setStoreroomDropActive(true);
+              }}
+              onDragLeave={() => setStoreroomDropActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setStoreroomDropActive(false);
+                const payload = getNoteDragData(e);
+                if (payload && payload.fromSpaceId !== null) handleDropNote(null, payload.noteId);
+              }}
               className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
-                pathname === '/storeroom'
+                storeroomDropActive
+                  ? 'ring-1 ring-accent-blue bg-accent-blue-bg text-accent-blue-dark'
+                  : pathname === '/storeroom'
                   ? 'bg-accent-blue-bg text-accent-blue-dark'
                   : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
               }`}
               style={{ fontWeight: pathname === '/storeroom' ? 580 : 400 }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><line x1="10" y1="14" x2="14" y2="14"/>
               </svg>
-              <span className="flex-1">My Storeroom</span>
+              <span className="flex-1 truncate">My Storeroom</span>
               {storeroomCount > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-accent-green text-accent-green-dark rounded-full">
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-accent-green text-accent-green-dark rounded-full flex-shrink-0">
                   {storeroomCount}
                 </span>
               )}
@@ -280,9 +374,8 @@ export function Sidebar() {
                   space={space}
                   pinnedIds={pinnedIds}
                   onNewChild={openNewChild}
-                  onRefresh={refreshSpaces}
-                  onPinToggle={handlePinToggle}
-                  onDelete={handleDeleteRequest}
+                  onOpenMenu={openMenu}
+                  onDropNote={(sid, nid) => handleDropNote(sid, nid)}
                 />
               ))}
             </ul>
@@ -290,7 +383,7 @@ export function Sidebar() {
         </div>
 
         {/* Settings */}
-        <div className="border-t border-border-default p-3">
+        <div className="border-t border-border-default p-3 flex-shrink-0">
           <Link
             href="/settings"
             className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
@@ -299,35 +392,94 @@ export function Sidebar() {
                 : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
             }`}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
             Settings
           </Link>
         </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
+          onDoubleClick={() => onWidthChange(208)}
+          className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize group ${
+            resizing ? 'bg-accent-blue' : 'hover:bg-accent-blue/40'
+          } transition-colors duration-120`}
+          title="Drag to resize · double-click to reset"
+        />
       </aside>
+
+      {/* Space context menu — portalled so the sidebar cannot clip it */}
+      {menu && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed w-44 bg-bg-base border border-border-default rounded-[10px] py-1 z-[100]"
+          style={{ top: menu.top, left: menu.left, boxShadow: 'var(--shadow-modal)' }}
+        >
+          <button
+            onClick={() => { setEditSpace(menu.space); setModalParent(null); setShowModal(true); setMenu(null); }}
+            className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Edit space
+          </button>
+          {(menu.space.depth ?? 0) < 2 && (
+            <button
+              onClick={() => { openNewChild(menu.space.id, menu.space.name); setMenu(null); }}
+              className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/>
+              </svg>
+              New sub-space
+            </button>
+          )}
+          <button
+            onClick={() => { handlePinToggle(menu.space.id); setMenu(null); }}
+            className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill={pinnedIds.includes(menu.space.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+            </svg>
+            {pinnedIds.includes(menu.space.id) ? 'Unpin from top' : 'Pin to top'}
+          </button>
+          <div className="h-px bg-border-light mx-2 my-1" />
+          <button
+            onClick={() => { handleDeleteRequest(menu.space.id, menu.space.name); setMenu(null); }}
+            className="w-full text-left px-3 py-2 text-[12px] text-danger hover:bg-danger-bg transition-colors flex items-center gap-2"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+            Delete space
+          </button>
+        </div>,
+        document.body
+      )}
 
       {showModal && (
         <SpaceModal
-          onClose={() => setShowModal(false)}
-          onCreated={refreshSpaces}
+          onClose={() => { setShowModal(false); setEditSpace(null); }}
+          onCreated={() => { refreshSpaces(); router.refresh(); }}
           parentId={modalParent?.id || null}
           parentName={modalParent?.name || null}
+          editSpace={editSpace}
         />
       )}
 
       {/* Delete confirmation modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-bg-base rounded-[14px] p-6 w-[360px] shadow-modal">
             <h3 className="font-serif text-[17px] text-text-primary mb-2" style={{ letterSpacing: '-0.01em' }}>
               Delete &ldquo;{deleteConfirm.name}&rdquo;?
             </h3>
-            <p className="text-[13px] text-text-secondary mb-1">
-              This space contains:
-            </p>
+            <p className="text-[13px] text-text-secondary mb-1">This space contains:</p>
             <ul className="text-[13px] text-text-secondary mb-4 list-disc list-inside space-y-0.5">
               {deleteConfirm.noteCount > 0 && (
                 <li>{deleteConfirm.noteCount} note{deleteConfirm.noteCount !== 1 ? 's' : ''} → will be moved to My Storeroom</li>

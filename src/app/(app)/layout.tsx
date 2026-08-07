@@ -12,6 +12,9 @@ import { FAB } from '@/components/layout/FAB';
 import { KeyboardShortcutsPanel } from '@/components/layout/KeyboardShortcutsPanel';
 import { PreferencesProvider } from '@/lib/preferences';
 
+const SIDEBAR_WIDTH_KEY = 'ruang_sidebar_width';
+const SIDEBAR_DEFAULT_W = 208;
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -19,10 +22,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_W);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
   }, [status, router]);
+
+  // Restore the user's sidebar width before first paint of the sidebar.
+  useEffect(() => {
+    const saved = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || '', 10);
+    if (!Number.isNaN(saved) && saved >= 176 && saved <= 420) setSidebarWidth(saved);
+  }, []);
+
+  const handleSidebarWidth = useCallback((w: number) => {
+    setSidebarWidth(w);
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w));
+  }, []);
 
   const toggleFocusMode = useCallback(() => setFocusMode((v) => !v), []);
 
@@ -63,10 +78,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onToggleFocusMode={toggleFocusMode}
             onShowShortcuts={() => setShowShortcuts(true)}
           />
-          {!focusMode && <Sidebar />}
+          {!focusMode && <Sidebar width={sidebarWidth} onWidthChange={handleSidebarWidth} />}
           <main
-            className="mt-[52px] min-h-[calc(100vh-52px)] transition-all duration-220"
-            style={{ marginLeft: focusMode ? 0 : 208 }}
+            className="mt-[52px] min-h-[calc(100vh-52px)]"
+            style={{ marginLeft: focusMode ? 0 : sidebarWidth }}
           >
             <div className="animate-fadeUp">{children}</div>
           </main>
@@ -86,10 +101,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             userName={user.name || ''}
             userEmail={user.email || ''}
           />
-          <main className={`${isNote ? 'pt-14' : 'pt-14 pb-16'} min-h-screen`}>
+          {/* Bottom tab bar stays visible inside the note editor so navigation
+              is always reachable; padding matches the bar + safe-area inset. */}
+          <main className="pt-14 min-h-screen" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
             <div className="animate-fadeUp">{children}</div>
           </main>
-          {!isNote && <MobileTabBar />}
+          <MobileTabBar />
         </div>
 
         <FAB />

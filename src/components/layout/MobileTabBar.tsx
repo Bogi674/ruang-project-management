@@ -25,9 +25,10 @@ const TABS = [
   {
     label: 'My Room',
     href: '/room',
+    // Desk lamp — deliberately distinct from the Home house icon.
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>
+        <path d="M9 2h6l3 7H6l3-7z"/><path d="M12 9v9"/><path d="M8 21h8"/><path d="M12 18a3 3 0 0 0-3 3"/><path d="M12 18a3 3 0 0 1 3 3"/>
       </svg>
     ),
   },
@@ -44,11 +45,14 @@ const TABS = [
 
 export function MobileTabBar() {
   const pathname = usePathname();
-  const isNote = pathname?.startsWith('/note');
-  if (isNote) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-bg-base border-t border-border-default safe-bottom flex">
+    // The 64px bar height is on top of the safe-area inset rather than inside
+    // it — otherwise the inset padding squeezes the icons over the top border.
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 bg-bg-base border-t border-border-default flex"
+      style={{ height: 'calc(64px + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {TABS.map((tab) => {
         const active = pathname === tab.href || (tab.href !== '/home' && pathname?.startsWith(tab.href));
         return (

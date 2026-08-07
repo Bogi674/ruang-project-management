@@ -5,13 +5,13 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
-import Strike from '@tiptap/extension-strike';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import { TextStyle, FontSize } from '@tiptap/extension-text-style';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { useEffect } from 'react';
 import { FormattingToolbar } from './FormattingToolbar';
+import { IndentExtension } from './IndentExtension';
 
 interface TipTapEditorProps {
   content?: object | null;
@@ -34,15 +34,21 @@ export function TipTapEditor({
 }: TipTapEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ strike: false }),
+      // StarterKit v3 already ships underline, strike and link — registering
+      // them again produced duplicate-extension warnings and flaky marks.
+      StarterKit.configure({ link: { openOnClick: false } }),
       Placeholder.configure({ placeholder }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Link.configure({ openOnClick: false }),
-      Underline,
-      Strike,
       Subscript,
       Superscript,
+      TextStyle,
+      FontSize,
+      IndentExtension,
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: content || (isChecklist
       ? { type: 'doc', content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] }
@@ -61,6 +67,7 @@ export function TipTapEditor({
     if (editor && content && !editor.isFocused) {
       editor.commands.setContent(content);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -70,11 +77,11 @@ export function TipTapEditor({
   if (!editor) return null;
 
   const toolbar = editable && (
-    <FormattingToolbar editor={editor} onAddWidget={onAddWidget} />
+    <FormattingToolbar editor={editor} onAddWidget={onAddWidget} position={toolbarPosition} />
   );
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 min-h-0">
       {toolbarPosition === 'top' && toolbar}
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="tiptap-editor min-h-full" />

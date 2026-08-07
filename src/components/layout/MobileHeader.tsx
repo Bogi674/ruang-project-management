@@ -25,11 +25,8 @@ export function MobileHeader({ inNote, noteTitle, onHamburger, userName = '', us
           </svg>
         </button>
         <span className="flex-1 text-13 font-semibold text-text-primary truncate">{noteTitle || 'Note'}</span>
-        <button className="w-8 h-8 flex items-center justify-center text-text-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-          </svg>
-        </button>
+        {/* Note actions live in the editor's own mobile action bar, so there is
+            no dead overflow button here. */}
       </header>
     );
   }

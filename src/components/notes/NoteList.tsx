@@ -4,14 +4,25 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note, Space } from '@/types';
 import { NoteRow } from './NoteRow';
+import { flattenSpaces } from '@/components/spaces/SpaceAssignMenu';
+import { isNoteDrag, getNoteDragData, moveNoteToSpace, emitNotesChanged } from '@/lib/dnd';
 
 interface NoteListProps {
   notes: Note[];
   emptyMessage?: string;
   showAssign?: boolean;
+  /**
+   * Space this list is scoped to. `null` = My Storeroom, `undefined` = mixed
+   * view (Home/Recent) where dropping a note does not imply a destination.
+   */
+  spaceId?: string | null;
 }
 
-export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to write something.", showAssign }: NoteListProps) {
+export function NoteList({
+  notes,
+  emptyMessage = 'Your Ruang is ready. Tap + to write something.',
+  spaceId,
+}: NoteListProps) {
   const router = useRouter();
   const [items, setItems] = useState<Note[]>(notes);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -19,10 +30,16 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+
+  // Keep in sync when the server component re-renders with fresh data.
+  useEffect(() => { setItems(notes); }, [notes]);
 
   useEffect(() => {
     fetch('/api/spaces').then(r => r.json()).then(d => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
+
+  const isScoped = spaceId !== undefined;
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -34,14 +51,11 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
   }
 
   function toggleSelectAll() {
-    if (selected.size === items.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(items.map(n => n.id)));
-    }
+    if (selected.size === items.length) setSelected(new Set());
+    else setSelected(new Set(items.map(n => n.id)));
   }
 
-  function handleNoteDeleted(id: string) {
+  function handleNoteRemoved(id: string) {
     setItems(prev => prev.filter(n => n.id !== id));
     setSelected(prev => { const next = new Set(prev); next.delete(id); return next; });
   }
@@ -49,36 +63,80 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
   async function handleBulkDelete() {
     if (!confirmBulkDelete) { setConfirmBulkDelete(true); return; }
     setBulkDeleting(true);
-    await Promise.all(Array.from(selected).map(id => fetch(`/api/notes/${id}`, { method: 'DELETE' })));
+    const ids = Array.from(selected);
+    await Promise.all(ids.map(id => fetch(`/api/notes/${id}`, { method: 'DELETE' })));
     setItems(prev => prev.filter(n => !selected.has(n.id)));
     setSelected(new Set());
     setConfirmBulkDelete(false);
     setBulkDeleting(false);
+    emitNotesChanged();
     router.refresh();
   }
 
-  async function handleBulkAssign(spaceId: string | null) {
-    await Promise.all(Array.from(selected).map(id =>
-      fetch(`/api/notes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ space_id: spaceId }),
-      })
-    ));
+  async function handleBulkAssign(targetSpaceId: string | null) {
+    const ids = Array.from(selected);
+    await Promise.all(ids.map(id => moveNoteToSpace(id, targetSpaceId)));
+    if (isScoped && targetSpaceId !== spaceId) {
+      setItems(prev => prev.filter(n => !selected.has(n.id)));
+    }
     setSelected(new Set());
     setShowSpacePicker(false);
+    emitNotesChanged();
     router.refresh();
   }
 
-  if (items.length === 0) {
-    return <p className="text-13 text-text-faint p-4">{emptyMessage}</p>;
+  // Dropping a note onto a scoped list moves it into that space.
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDropActive(false);
+    if (!isScoped) return;
+    const payload = getNoteDragData(e);
+    if (!payload || payload.fromSpaceId === spaceId) return;
+    const ok = await moveNoteToSpace(payload.noteId, spaceId);
+    if (!ok) return;
+    emitNotesChanged();
+    router.refresh();
   }
 
-  const allSelected = selected.size === items.length;
+  const allSelected = items.length > 0 && selected.size === items.length;
   const someSelected = selected.size > 0 && !allSelected;
+  const flatSpaces = flattenSpaces(spaces);
+
+  const dropProps = isScoped
+    ? {
+        onDragOver: (e: React.DragEvent) => {
+          if (!isNoteDrag(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move' as const;
+          setDropActive(true);
+        },
+        onDragLeave: (e: React.DragEvent) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropActive(false);
+        },
+        onDrop: handleDrop,
+      }
+    : {};
+
+  if (items.length === 0) {
+    return (
+      <div
+        {...dropProps}
+        className={`p-4 transition-colors duration-120 ${
+          dropActive ? 'bg-accent-blue-bg' : ''
+        }`}
+      >
+        <p className="text-13 text-text-faint">
+          {dropActive ? 'Drop to move here' : emptyMessage}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div
+      {...dropProps}
+      className={`transition-colors duration-120 ${dropActive ? 'bg-accent-blue-bg' : ''}`}
+    >
       {/* Header row: select-all + bulk actions */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border-light bg-bg-surface min-h-[36px]">
         <button
@@ -90,6 +148,7 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
               ? 'bg-accent-blue-bg border-accent-blue'
               : 'border-border-medium hover:border-accent-blue'
           }`}
+          aria-label="Select all notes"
         >
           {(allSelected || someSelected) && (
             <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,24 +176,25 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
               </button>
               {showSpacePicker && (
                 <div
-                  className="absolute right-0 top-full mt-1 w-48 bg-bg-base border border-border-default rounded-[10px] py-1.5 z-30"
+                  className="absolute right-0 top-full mt-1 w-48 max-h-[280px] overflow-y-auto bg-bg-base border border-border-default rounded-[10px] py-1.5 z-30"
                   style={{ boxShadow: '0 8px 32px rgba(44,56,72,.12)' }}
                 >
                   <button
                     onClick={() => handleBulkAssign(null)}
                     className="w-full text-left px-3 py-1.5 text-[12px] text-text-muted hover:bg-bg-surface transition-colors"
                   >
-                    Storeroom (no space)
+                    My Storeroom
                   </button>
-                  {spaces.length > 0 && <div className="h-px bg-border-light mx-2 my-1" />}
-                  {spaces.map(s => (
+                  {flatSpaces.length > 0 && <div className="h-px bg-border-light mx-2 my-1" />}
+                  {flatSpaces.map(s => (
                     <button
                       key={s.id}
                       onClick={() => handleBulkAssign(s.id)}
                       className="w-full text-left px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-surface transition-colors flex items-center gap-2"
+                      style={{ paddingLeft: 12 + s._level * 12 }}
                     >
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color || '#738290' }} />
-                      {s.icon && `${s.icon} `}{s.name}
+                      <span className="truncate">{s.icon && `${s.icon} `}{s.name}</span>
                     </button>
                   ))}
                 </div>
@@ -175,10 +235,11 @@ export function NoteList({ notes, emptyMessage = "Your Ruang is ready. Tap + to 
         <NoteRow
           key={note.id}
           note={note}
-          showAssign={showAssign}
+          spaceId={spaceId}
           selected={selected.has(note.id)}
           onToggleSelect={toggleSelect}
-          onDelete={handleNoteDeleted}
+          onDelete={handleNoteRemoved}
+          onMoved={handleNoteRemoved}
         />
       ))}
 

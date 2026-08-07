@@ -11,7 +11,8 @@ import { ReminderWidget } from '@/components/widgets/ReminderWidget';
 import { FileWidget } from '@/components/widgets/FileWidget';
 import { LinkWidget } from '@/components/widgets/LinkWidget';
 import { AutosaveIndicator } from '@/components/layout/AutosaveIndicator';
-import { scheduleSync, loadDraft } from '@/lib/autosave';
+import { scheduleSync, loadDraftFull, flushNote, cancelSync, installFlushHooks } from '@/lib/autosave';
+import { emitNotesChanged } from '@/lib/dnd';
 import { formatDate } from '@/lib/utils';
 
 interface NoteEditorProps {
@@ -49,11 +50,15 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   const [deleting, setDeleting] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialNote?.widgets || []);
   const [isLocked, setIsLocked] = useState(initialNote?.is_locked ?? false);
-  const [content, setContent] = useState<object | null>(() => {
-    const draft = loadDraft(noteId);
-    return draft || initialNote?.content || null;
-  });
-  const [noteTitle, setNoteTitle] = useState(initialNote?.title || '');
+  // An unsynced local draft always wins over the server copy — it is by
+  // definition newer than whatever the last successful sync wrote.
+  const draftRef = useRef(loadDraftFull(noteId));
+  const [content, setContent] = useState<object | null>(
+    () => draftRef.current?.content || initialNote?.content || null
+  );
+  const [noteTitle, setNoteTitle] = useState(
+    () => draftRef.current?.title ?? initialNote?.title ?? ''
+  );
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialNote?.space_id || null);
   const [showSpacePicker, setShowSpacePicker] = useState(false);
@@ -78,12 +83,22 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   const selectedSpace = spaces.find(s => s.id === selectedSpaceId) || initialNote?.space || null;
 
   const triggerSync = useCallback(
-    (newContent: object, title: string) => {
+    (newContent: object | null, title: string) => {
       const finalTitle = title.trim() || defaultTitle(createdAt);
       scheduleSync(noteId, newContent, setAutosave, finalTitle);
     },
     [noteId, createdAt]
   );
+
+  // Push any queued edit before the editor goes away (navigation, unmount),
+  // and install page-level hooks for tab-hide / reload / app backgrounding.
+  useEffect(() => {
+    const teardown = installFlushHooks();
+    return () => {
+      teardown();
+      flushNote(noteId);
+    };
+  }, [noteId]);
 
   const notifyFirstEdit = useCallback(() => {
     if (onFirstEdit && !hasCalledFirstEdit.current) {
@@ -106,7 +121,9 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
       const val = e.target.value;
       setNoteTitle(val);
       notifyFirstEdit();
-      if (content) triggerSync(content, val);
+      // Always sync — a title typed into a note with no body yet is still an
+      // edit, and previously it was dropped whenever `content` was null.
+      triggerSync(content, val);
     },
     [content, triggerSync, notifyFirstEdit]
   );
@@ -183,7 +200,10 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   async function handleDeleteNote() {
     if (!confirmDelete) { setConfirmDelete(true); return; }
     setDeleting(true);
+    // Drop any queued autosave so it cannot resurrect the deleted note.
+    cancelSync(noteId);
     await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
+    emitNotesChanged();
     router.push('/home');
     router.refresh();
   }
@@ -194,7 +214,70 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-52px)] md:h-[calc(100vh-52px)]">
+    // Mobile: the app shell already offsets the 56px header and the bottom tab
+    // bar, so the editor fills the remaining space rather than assuming the
+    // desktop 52px navbar height (which pushed the title under the header).
+    <div className="flex flex-col min-h-[60vh] md:h-[calc(100vh-52px)] md:min-h-0">
+      {/* Mobile action bar — the desktop action row is hidden on small screens,
+          so delete / lock / history / export would otherwise be unreachable. */}
+      <div className="flex md:hidden items-center gap-1 px-5 pt-3 flex-shrink-0">
+        <AutosaveIndicator state={autosave} />
+        <div className="flex-1" />
+        <button
+          onClick={handleToggleLock}
+          aria-label={isLocked ? 'Unlock note' : 'Lock note'}
+          className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+            isLocked ? 'text-accent-blue-dark bg-accent-blue-bg' : 'text-text-muted'
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            {isLocked ? <path d="M7 11V7a5 5 0 0 1 9.9-1"/> : <path d="M7 11V7a5 5 0 0 1 10 0v4"/>}
+          </svg>
+        </button>
+        <button
+          onClick={() => setShowVersionHistory(true)}
+          aria-label="Version history"
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+          </svg>
+        </button>
+        <button
+          onClick={handleExportText}
+          aria-label="Export as text"
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleDeleteNote}
+              disabled={deleting}
+              className="h-8 px-3 text-[12px] font-medium text-white bg-danger rounded-lg"
+            >{deleting ? '…' : 'Delete'}</button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="h-8 px-2 text-[12px] text-text-muted"
+            >Cancel</button>
+          </div>
+        ) : (
+          <button
+            onClick={handleDeleteNote}
+            aria-label="Delete note"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
       {/* Desktop back + breadcrumb + actions */}
       <div className="hidden md:flex items-start justify-between px-20 pt-8 pb-2 max-w-[820px] md:mx-auto w-full flex-shrink-0">
         <div className="flex flex-col gap-1">
@@ -298,7 +381,7 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
       </div>
 
       {/* Title area */}
-      <div className="px-8 md:px-20 max-w-[820px] md:mx-auto w-full flex-shrink-0">
+      <div className="px-5 pt-4 md:pt-0 md:px-20 max-w-[820px] md:mx-auto w-full flex-shrink-0">
         <textarea
           ref={titleRef}
           value={noteTitle}
@@ -306,7 +389,7 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
           placeholder="Untitled"
           disabled={isLocked}
           rows={1}
-          className="w-full resize-none overflow-hidden font-serif text-[28px] md:text-[32px] text-text-primary bg-transparent border-none outline-none placeholder:text-text-faint leading-tight disabled:cursor-not-allowed"
+          className="w-full resize-none overflow-hidden font-serif text-[26px] md:text-[32px] text-text-primary bg-transparent border-none outline-none placeholder:text-text-faint leading-tight disabled:cursor-not-allowed"
           style={{ letterSpacing: '-0.025em', lineHeight: 1.2 }}
         />
 
@@ -383,7 +466,7 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
       </div>
 
       {/* Editor with toolbar at top */}
-      <div className="flex-1 overflow-hidden flex flex-col px-8 md:px-20 max-w-[820px] md:mx-auto w-full pb-2">
+      <div className="flex-1 min-h-0 flex flex-col px-5 md:px-20 max-w-[820px] md:mx-auto w-full pb-2">
         <TipTapEditor
           content={content}
           isChecklist={initialNote?.type === 'checklist'}
@@ -396,7 +479,7 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFi
 
       {/* Widgets zone */}
       {widgets.length > 0 && (
-        <div className="px-8 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-[#edf3fa] pt-4 pb-2 flex-shrink-0">
+        <div className="px-5 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-[#edf3fa] pt-4 pb-2 flex-shrink-0">
           <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-3">Attached</p>
           <div className="space-y-2">
             {widgets.map((w) => {
