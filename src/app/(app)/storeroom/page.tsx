@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
-import { NoteRow } from '@/components/notes/NoteRow';
+import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -53,11 +53,7 @@ export default async function StoreroomPage({ searchParams }: { searchParams: Se
       </div>
 
       <div className="bg-bg-base border border-border-default rounded-card overflow-hidden">
-        {items.length === 0 ? (
-          <p className="text-13 text-text-faint p-5">Nothing here. That&apos;s a good sign.</p>
-        ) : (
-          items.map((note) => <NoteRow key={note.id} note={note} showAssign />)
-        )}
+        <NoteList notes={items} emptyMessage="Nothing here. That's a good sign." showAssign />
       </div>
     </div>
   );

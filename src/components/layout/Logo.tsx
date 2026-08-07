@@ -21,11 +21,11 @@ export function RuangMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
     >
       <polygon
         points="46,6 50,73 5,106"
-        fill="var(--logo-fill)"
+        style={{ fill: 'var(--logo-fill, #d4d4d4)' }}
       />
-      <line x1="50" y1="6" x2="50" y2="73" stroke="var(--logo-stroke)" strokeWidth="7" strokeLinecap="round" />
-      <line x1="50" y1="73" x2="5" y2="106" stroke="var(--logo-stroke)" strokeWidth="7" strokeLinecap="round" />
-      <line x1="50" y1="73" x2="95" y2="106" stroke="var(--logo-stroke)" strokeWidth="7" strokeLinecap="round" />
+      <line x1="50" y1="6" x2="50" y2="73" style={{ stroke: 'var(--logo-stroke, #2c3848)' }} strokeWidth="7" strokeLinecap="round" />
+      <line x1="50" y1="73" x2="5" y2="106" style={{ stroke: 'var(--logo-stroke, #2c3848)' }} strokeWidth="7" strokeLinecap="round" />
+      <line x1="50" y1="73" x2="95" y2="106" style={{ stroke: 'var(--logo-stroke, #2c3848)' }} strokeWidth="7" strokeLinecap="round" />
     </svg>
   );
 }
@@ -40,7 +40,7 @@ export function RuangLockup({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
         className="font-serif select-none leading-none"
         style={{
           fontSize: textSize,
-          color: 'var(--logo-text)',
+          color: 'var(--logo-text, #2c3848)',
           letterSpacing: '-0.02em',
           fontWeight: 400,
         }}

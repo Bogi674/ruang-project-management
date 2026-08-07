@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WidgetType } from '@/types';
 import { NoteEditor } from '../NoteEditor';
@@ -13,6 +13,8 @@ export default function NewNotePage() {
   const [noteId, setNoteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(true);
   const createdRef = useRef(false);
+  const hasEditedRef = useRef(false);
+  const noteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (createdRef.current) return;
@@ -27,11 +29,22 @@ export default function NewNotePage() {
       .then((data) => {
         if (data.id) {
           setNoteId(data.id);
+          noteIdRef.current = data.id;
           setCreating(false);
           window.history.replaceState(null, '', `/note/${data.id}`);
         }
       })
       .catch(() => router.replace('/home'));
+
+    return () => {
+      if (!hasEditedRef.current && noteIdRef.current) {
+        fetch(`/api/notes/${noteIdRef.current}`, { method: 'DELETE', keepalive: true });
+      }
+    };
+  }, []);
+
+  const handleFirstEdit = useCallback(() => {
+    hasEditedRef.current = true;
   }, []);
 
   if (creating || !noteId) {
@@ -42,5 +55,5 @@ export default function NewNotePage() {
     );
   }
 
-  return <NoteEditor noteId={noteId} isNew initialWidgetType={initialWidget} />;
+  return <NoteEditor noteId={noteId} isNew onFirstEdit={handleFirstEdit} initialWidgetType={initialWidget} />;
 }
