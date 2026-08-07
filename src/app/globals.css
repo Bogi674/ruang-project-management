@@ -63,13 +63,35 @@
   }
 
   body {
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-body, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
     color: var(--text-primary);
     background: var(--bg-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* ── Dark theme ── */
+:root[data-theme="dark"] {
+  --text-primary:    #dde4ed;
+  --text-secondary:  #a8b8c8;
+  --text-muted:      #6a7a8a;
+  --text-faint:      #445060;
+
+  --bg-base:         #1c2130;
+  --bg-subtle:       #161b26;
+  --bg-surface:      #212838;
+  --bg-elevated:     #283040;
+  --bg-page:         #141820;
+
+  --border-default:  #2e3a4a;
+  --border-light:    #242f3e;
+  --border-medium:   #364555;
+}
+
+/* ── Density ── */
+:root[data-density="compact"]   { font-size: 13.5px; }
+:root[data-density="spacious"]  { font-size: 15.5px; }
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

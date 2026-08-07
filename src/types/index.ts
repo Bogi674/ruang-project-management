@@ -42,11 +42,21 @@ export interface Note {
   pinned_date: string | null;
   pinned_date_end: string | null;
   is_pinned_to_home: boolean;
+  is_locked: boolean;
   is_public: boolean;
   created_at: string;
   updated_at: string;
   space?: Space | null;
   widgets?: Widget[];
+}
+
+export interface NoteVersion {
+  id: string;
+  note_id: string;
+  user_id: string;
+  content: object;
+  title: string | null;
+  created_at: string;
 }
 
 export interface ReminderContent {
