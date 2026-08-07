@@ -19,6 +19,7 @@ interface NoteEditorProps {
   initialNote?: Note;
   isNew?: boolean;
   initialWidgetType?: WidgetType | null;
+  onFirstEdit?: () => void;
 }
 
 function formatCreatedAt(dateStr: string): string {
@@ -26,7 +27,7 @@ function formatCreatedAt(dateStr: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${pad(d.getDate())} ${days[d.getDay()]} ${months[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${days[d.getDay()]}, ${pad(d.getDate())} ${months[d.getMonth()]}, ${d.getFullYear()}`;
 }
 
 function defaultTitle(createdAt?: string): string {
@@ -34,11 +35,12 @@ function defaultTitle(createdAt?: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `Untitled Notes ${pad(d.getDate())} ${days[d.getDay()]} ${months[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `Untitled ${days[d.getDay()]}, ${pad(d.getDate())} ${months[d.getMonth()]}, ${d.getFullYear()}`;
 }
 
-export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: NoteEditorProps) {
+export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType, onFirstEdit }: NoteEditorProps) {
   const router = useRouter();
+  const hasCalledFirstEdit = useRef(false);
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -79,21 +81,30 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
     [noteId, createdAt]
   );
 
+  const notifyFirstEdit = useCallback(() => {
+    if (onFirstEdit && !hasCalledFirstEdit.current) {
+      hasCalledFirstEdit.current = true;
+      onFirstEdit();
+    }
+  }, [onFirstEdit]);
+
   const handleChange = useCallback(
     (newContent: object) => {
       setContent(newContent);
+      notifyFirstEdit();
       triggerSync(newContent, noteTitle);
     },
-    [noteId, noteTitle, triggerSync]
+    [noteId, noteTitle, triggerSync, notifyFirstEdit]
   );
 
   const handleTitleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setNoteTitle(val);
+      notifyFirstEdit();
       if (content) triggerSync(content, val);
     },
-    [content, triggerSync]
+    [content, triggerSync, notifyFirstEdit]
   );
 
   async function handleSpaceSelect(spaceId: string | null) {

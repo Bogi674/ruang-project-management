@@ -61,12 +61,16 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) token.id = user.id;
+      if (account) token.provider = account.provider;
       return token;
     },
     async session({ session, token }) {
-      if (session.user) (session.user as { id?: string }).id = token.id as string;
+      if (session.user) {
+        (session.user as { id?: string; provider?: string }).id = token.id as string;
+        (session.user as { id?: string; provider?: string }).provider = token.provider as string;
+      }
       return session;
     },
   },

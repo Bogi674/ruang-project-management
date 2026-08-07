@@ -12,15 +12,11 @@ export default async function SettingsPage() {
   const user = session.user as { name?: string; email?: string; image?: string; id?: string };
 
   let dbAvatar: string | null = null;
-  let isGoogleUser = false;
+  const isGoogleUser = (user as { provider?: string }).provider === 'google';
   if (user.id) {
     const db = createServerClient();
     const { data } = await db.from('users').select('avatar_url').eq('id', user.id).single();
     dbAvatar = data?.avatar_url || null;
-
-    const { data: authUser } = await db.auth.admin.getUserById(user.id);
-    const identities = authUser?.user?.identities || [];
-    isGoogleUser = identities.some((i: { provider: string }) => i.provider === 'google');
   }
 
   return (

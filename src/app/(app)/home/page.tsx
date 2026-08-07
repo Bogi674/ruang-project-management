@@ -3,7 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { createServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import { NoteCard } from '@/components/notes/NoteCard';
-import { NoteRow } from '@/components/notes/NoteRow';
+import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/types';
 import { formatDate, getDayGreeting } from '@/lib/utils';
 
@@ -54,11 +54,7 @@ export default async function HomePage() {
       <section className="mb-8">
         <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-3">Recent</p>
         <div className="bg-bg-base border border-border-default rounded-card overflow-hidden">
-          {recent.length === 0 ? (
-            <p className="text-13 text-text-faint p-4">Your Ruang is ready. Tap + to write something.</p>
-          ) : (
-            recent.map((note) => <NoteRow key={note.id} note={note} />)
-          )}
+          <NoteList notes={recent} emptyMessage="Your Ruang is ready. Tap + to write something." />
         </div>
       </section>
 

@@ -12,9 +12,11 @@ interface NoteRowProps {
   showAssign?: boolean;
   onAssign?: (noteId: string) => void;
   onDelete?: (noteId: string) => void;
+  selected?: boolean;
+  onToggleSelect?: (noteId: string) => void;
 }
 
-export function NoteRow({ note, showAssign, onAssign, onDelete }: NoteRowProps) {
+export function NoteRow({ note, showAssign, onAssign, onDelete, selected, onToggleSelect }: NoteRowProps) {
   const router = useRouter();
   const title = note.title || extractTitleFromTipTap(note.content) || 'Untitled';
   const [pinned, setPinned] = useState(note.is_pinned_to_home);
@@ -47,7 +49,20 @@ export function NoteRow({ note, showAssign, onAssign, onDelete }: NoteRowProps) 
       className="flex items-center gap-2 px-4 py-3 min-h-[48px] border-b border-border-light last:border-b-0 hover:bg-bg-surface transition-colors duration-80 group"
       onMouseLeave={() => setConfirmDelete(false)}
     >
-      <div className="w-3.5 h-3.5 border border-border-medium rounded-[3px] flex-shrink-0" />
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(note.id); }}
+        className={`w-3.5 h-3.5 border rounded-[3px] flex-shrink-0 flex items-center justify-center transition-colors ${
+          selected
+            ? 'bg-accent-blue border-accent-blue'
+            : 'border-border-medium hover:border-accent-blue'
+        }`}
+      >
+        {selected && (
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1.5,5 4,7.5 8.5,2.5" />
+          </svg>
+        )}
+      </button>
       <Link href={`/note/${note.id}`} className="flex-1 min-w-0 no-underline">
         <p className="text-[13.5px] text-text-primary truncate">{title}</p>
       </Link>
