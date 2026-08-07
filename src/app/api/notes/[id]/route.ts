@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if ('is_pinned_to_home' in body) updates.is_pinned_to_home = body.is_pinned_to_home;
   if ('pinned_date' in body) updates.pinned_date = body.pinned_date;
   if ('tags' in body) updates.tags = body.tags;
+  if ('is_locked' in body) updates.is_locked = body.is_locked;
 
   const { data, error: dbError } = await db
     .from('notes')

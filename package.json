@@ -55,6 +55,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-dropzone": "^20.0.0",
+    "resend": "^6.18.1",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1"
   },

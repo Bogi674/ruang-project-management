@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Note, Widget, WidgetType, AutosaveState } from '@/types';
 import { TipTapEditor } from '@/components/editor/TipTapEditor';
+import { VersionHistory } from '@/components/editor/VersionHistory';
 import { WidgetPicker } from '@/components/widgets/WidgetPicker';
 import { ReminderWidget } from '@/components/widgets/ReminderWidget';
 import { FileWidget } from '@/components/widgets/FileWidget';
@@ -24,7 +25,9 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
   const router = useRouter();
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialNote?.widgets || []);
+  const [isLocked, setIsLocked] = useState(initialNote?.is_locked ?? false);
   const [content, setContent] = useState<object | null>(() => {
     const draft = loadDraft(noteId);
     return draft || initialNote?.content || null;
@@ -66,6 +69,48 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
     setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
   }
 
+  async function handleToggleLock() {
+    const next = !isLocked;
+    setIsLocked(next);
+    await fetch(`/api/notes/${noteId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_locked: next }),
+    });
+  }
+
+  async function handleSaveVersion() {
+    await fetch(`/api/notes/${noteId}/versions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, title }),
+    });
+  }
+
+  function handleExportText() {
+    if (!content) return;
+    const doc = content as { content?: Array<{ type: string; content?: Array<{ text?: string }> }> };
+    const text = (doc.content || [])
+      .map((node) => (node.content || []).map((n) => n.text || '').join(''))
+      .join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleExportPDF() {
+    window.print();
+  }
+
+  function handleRestoreVersion(restoredContent: object) {
+    setContent(restoredContent);
+    scheduleSync(noteId, restoredContent, setAutosave);
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-52px)] md:h-[calc(100vh-52px)]">
       {/* Desktop back + breadcrumb */}
@@ -91,19 +136,102 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
         </div>
       </div>
 
-      {/* Title area */}
+      {/* Title area + action buttons */}
       <div className="px-8 md:px-20 pb-4 max-w-[820px] md:mx-auto w-full flex-shrink-0">
-        <h1
-          className="font-serif text-[26px] md:text-[32px] text-text-primary leading-tight w-full"
-          style={{ letterSpacing: '-0.025em', lineHeight: 1.2 }}
-        >
-          {title || <span className="text-text-muted">Untitled</span>}
-        </h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1
+            className="font-serif text-[26px] md:text-[32px] text-text-primary leading-tight flex-1"
+            style={{ letterSpacing: '-0.025em', lineHeight: 1.2 }}
+          >
+            {title || <span className="text-text-muted">Untitled</span>}
+          </h1>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1 pt-1 flex-shrink-0">
+            {/* Lock/unlock */}
+            <button
+              onClick={handleToggleLock}
+              title={isLocked ? 'Unlock note' : 'Lock note'}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-bg-surface hover:text-text-secondary transition-colors duration-120"
+            >
+              {isLocked ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              )}
+            </button>
+
+            {/* Save version */}
+            <button
+              onClick={handleSaveVersion}
+              title="Save version checkpoint"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-bg-surface hover:text-text-secondary transition-colors duration-120"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </button>
+
+            {/* Version history */}
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              title="Version history"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-bg-surface hover:text-text-secondary transition-colors duration-120"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v5h5"/>
+                <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+              </svg>
+            </button>
+
+            {/* Export dropdown */}
+            <div className="relative group">
+              <button
+                title="Export note"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-bg-surface hover:text-text-secondary transition-colors duration-120"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </button>
+              <div className="absolute right-0 top-full mt-1 w-36 bg-bg-base border border-border-default rounded-[10px] py-1 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-120"
+                style={{ boxShadow: 'var(--shadow-modal)' }}>
+                <button
+                  onClick={handleExportText}
+                  className="w-full text-left px-3 py-2 text-13 text-text-secondary hover:bg-bg-surface transition-colors duration-80"
+                >
+                  Plain text (.txt)
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full text-left px-3 py-2 text-13 text-text-secondary hover:bg-bg-surface transition-colors duration-80"
+                >
+                  Print / PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 mt-2">
           <p className="text-11.5 text-text-faint">
             {initialNote ? formatRelativeTime(initialNote.updated_at) : 'New note'}
           </p>
           <AutosaveIndicator state={autosave} />
+          {isLocked && (
+            <span className="text-11 font-medium text-text-faint bg-bg-surface border border-border-light rounded-full px-2 py-0.5">
+              Locked
+            </span>
+          )}
         </div>
       </div>
 
@@ -113,6 +241,8 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
           content={content}
           isChecklist={initialNote?.type === 'checklist'}
           onChange={handleChange}
+          editable={!isLocked}
+          onAddWidget={() => setShowWidgetPicker(true)}
         />
       </div>
 
@@ -138,6 +268,14 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
         <WidgetPicker
           onSelect={handleAddWidget}
           onClose={() => setShowWidgetPicker(false)}
+        />
+      )}
+
+      {showVersionHistory && (
+        <VersionHistory
+          noteId={noteId}
+          onRestore={handleRestoreVersion}
+          onClose={() => setShowVersionHistory(false)}
         />
       )}
     </div>

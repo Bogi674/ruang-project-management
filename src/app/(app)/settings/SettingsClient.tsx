@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signOut } from 'next-auth/react';
 import { getInitials } from '@/lib/utils';
+import { usePreferences, ACCENT_PRESETS } from '@/lib/preferences';
 
 interface SettingsClientProps {
   name: string;
@@ -10,15 +11,43 @@ interface SettingsClientProps {
   image?: string | null;
 }
 
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
+
+const TYPOGRAPHY_OPTIONS = [
+  { value: 'sans', label: 'Sans-serif', sub: 'Clean, modern' },
+  { value: 'serif', label: 'Serif', sub: 'Newsreader, editorial' },
+];
+
+const DENSITY_OPTIONS = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'spacious', label: 'Spacious' },
+];
+
+const LANDING_OPTIONS = [
+  { value: 'home', label: 'Home' },
+  { value: 'room', label: 'My Room' },
+  { value: 'storeroom', label: 'My Storeroom' },
+];
+
 export function SettingsClient({ name, email }: SettingsClientProps) {
   const [displayName, setDisplayName] = useState(name);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { preferences, updatePreferences } = usePreferences();
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: displayName }) });
+    await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: displayName }),
+    });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -26,7 +55,9 @@ export function SettingsClient({ name, email }: SettingsClientProps) {
 
   return (
     <div className="px-12 py-9 max-w-[660px]">
-      <h1 className="font-serif text-[24px] text-text-primary mb-8" style={{ letterSpacing: '-0.02em' }}>Account Settings</h1>
+      <h1 className="font-serif text-[24px] text-text-primary mb-8" style={{ letterSpacing: '-0.02em' }}>
+        Account Settings
+      </h1>
 
       {/* Profile */}
       <section className="mb-8">
@@ -38,9 +69,6 @@ export function SettingsClient({ name, email }: SettingsClientProps) {
             <p className="text-15 font-semibold text-text-primary">{name}</p>
             <p className="text-13 text-text-muted">{email}</p>
           </div>
-          <button className="text-12 text-text-secondary border border-border-default rounded-btn px-3 py-1.5 hover:bg-bg-surface transition-colors duration-120">
-            Change photo
-          </button>
         </div>
 
         <form onSubmit={handleSave} className="space-y-4">
@@ -62,12 +90,6 @@ export function SettingsClient({ name, email }: SettingsClientProps) {
               className="w-full h-12 px-4 rounded-input border border-border-medium text-14 text-text-muted bg-bg-surface outline-none cursor-not-allowed"
             />
           </div>
-          <div className="flex items-center justify-between py-3 border-b border-border-default">
-            <label className="text-13 font-semibold text-text-primary">Password</label>
-            <button type="button" className="text-13 text-text-secondary border border-border-default rounded-btn px-3 py-1.5 hover:bg-bg-surface transition-colors duration-120">
-              Change
-            </button>
-          </div>
           <button
             type="submit"
             disabled={saving}
@@ -76,6 +98,149 @@ export function SettingsClient({ name, email }: SettingsClientProps) {
             {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
           </button>
         </form>
+      </section>
+
+      {/* Personalization */}
+      <section className="mb-8 space-y-6">
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint">Personalization</p>
+
+        {/* Accent color */}
+        <div>
+          <p className="text-13 font-semibold text-text-primary mb-3">Accent color</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {ACCENT_PRESETS.map(({ label, value }) => {
+              const active = (preferences.accent_color || '#A1B5D8') === value;
+              return (
+                <button
+                  key={value}
+                  title={label}
+                  onClick={() => updatePreferences({ accent_color: value })}
+                  className="w-8 h-8 rounded-full transition-all duration-120 flex items-center justify-center"
+                  style={{
+                    background: value,
+                    outline: active ? `2.5px solid ${value}` : '2.5px solid transparent',
+                    outlineOffset: '2px',
+                    boxShadow: active ? `0 0 0 1px rgba(0,0,0,0.08)` : undefined,
+                  }}
+                >
+                  {active && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m20 6-11 11-5-5"/>
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Theme */}
+        <div>
+          <p className="text-13 font-semibold text-text-primary mb-3">Theme</p>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map(({ value, label }) => {
+              const active = (preferences.theme_preference || 'system') === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updatePreferences({ theme_preference: value })}
+                  className="flex-1 h-10 rounded-btn text-13 font-medium border transition-colors duration-120"
+                  style={{
+                    background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                    borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Typography */}
+        <div>
+          <p className="text-13 font-semibold text-text-primary mb-3">Typography</p>
+          <div className="grid grid-cols-2 gap-2">
+            {TYPOGRAPHY_OPTIONS.map(({ value, label, sub }) => {
+              const active = (preferences.typography_preference || 'sans') === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updatePreferences({ typography_preference: value })}
+                  className="p-3 rounded-[10px] border text-left transition-colors duration-120"
+                  style={{
+                    background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                    borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                  }}
+                >
+                  <p
+                    className="text-14 mb-0.5"
+                    style={{
+                      fontFamily: value === 'serif' ? "'Newsreader', Georgia, serif" : undefined,
+                      color: active ? 'var(--accent-blue-dark)' : 'var(--text-primary)',
+                      fontWeight: active ? 600 : 400,
+                    }}
+                  >
+                    {label}
+                  </p>
+                  <p className="text-12 text-text-muted">{sub}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Density */}
+        <div>
+          <p className="text-13 font-semibold text-text-primary mb-3">Density</p>
+          <div className="flex gap-2">
+            {DENSITY_OPTIONS.map(({ value, label }) => {
+              const active = (preferences.density_preference || 'comfortable') === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updatePreferences({ density_preference: value })}
+                  className="flex-1 h-10 rounded-btn text-13 font-medium border transition-colors duration-120"
+                  style={{
+                    background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                    borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Landing page */}
+        <div>
+          <p className="text-13 font-semibold text-text-primary mb-3">Open app to</p>
+          <div className="flex gap-2">
+            {LANDING_OPTIONS.map(({ value, label }) => {
+              const active = (preferences.landing_page_preference || 'home') === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updatePreferences({ landing_page_preference: value })}
+                  className="flex-1 h-10 rounded-btn text-13 font-medium border transition-colors duration-120"
+                  style={{
+                    background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                    borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
       {/* Connected */}

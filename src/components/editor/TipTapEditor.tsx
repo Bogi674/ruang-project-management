@@ -18,9 +18,11 @@ interface TipTapEditorProps {
   isChecklist?: boolean;
   onChange?: (content: object) => void;
   placeholder?: string;
+  editable?: boolean;
+  onAddWidget?: () => void;
 }
 
-export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'Start writing…' }: TipTapEditorProps) {
+export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'Start writing…', editable = true, onAddWidget }: TipTapEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ strike: false }),
@@ -36,6 +38,7 @@ export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'St
     content: content || (isChecklist
       ? { type: 'doc', content: [{ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }] }
       : undefined),
+    editable,
     editorProps: {
       attributes: { class: 'tiptap-editor' },
     },
@@ -51,6 +54,10 @@ export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'St
     }
   }, []);
 
+  useEffect(() => {
+    if (editor) editor.setEditable(editable);
+  }, [editor, editable]);
+
   if (!editor) return null;
 
   return (
@@ -58,7 +65,7 @@ export function TipTapEditor({ content, isChecklist, onChange, placeholder = 'St
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="tiptap-editor min-h-full" />
       </div>
-      <FormattingToolbar editor={editor} />
+      {editable && <FormattingToolbar editor={editor} onAddWidget={onAddWidget} />}
     </div>
   );
 }
