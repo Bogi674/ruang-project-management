@@ -11,12 +11,14 @@ interface NoteRowProps {
   note: Note;
   showAssign?: boolean;
   onAssign?: (noteId: string) => void;
+  onDelete?: (noteId: string) => void;
 }
 
-export function NoteRow({ note, showAssign, onAssign }: NoteRowProps) {
+export function NoteRow({ note, showAssign, onAssign, onDelete }: NoteRowProps) {
   const router = useRouter();
   const title = note.title || extractTitleFromTipTap(note.content) || 'Untitled';
   const [pinned, setPinned] = useState(note.is_pinned_to_home);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handlePin(e: React.MouseEvent) {
     e.preventDefault();
@@ -31,8 +33,20 @@ export function NoteRow({ note, showAssign, onAssign }: NoteRowProps) {
     router.refresh();
   }
 
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    await fetch(`/api/notes/${note.id}`, { method: 'DELETE' });
+    onDelete?.(note.id);
+    router.refresh();
+  }
+
   return (
-    <div className="flex items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border-light last:border-b-0 hover:bg-bg-surface transition-colors duration-80 group">
+    <div
+      className="flex items-center gap-2 px-4 py-3 min-h-[48px] border-b border-border-light last:border-b-0 hover:bg-bg-surface transition-colors duration-80 group"
+      onMouseLeave={() => setConfirmDelete(false)}
+    >
       <div className="w-3.5 h-3.5 border border-border-medium rounded-[3px] flex-shrink-0" />
       <Link href={`/note/${note.id}`} className="flex-1 min-w-0 no-underline">
         <p className="text-[13.5px] text-text-primary truncate">{title}</p>
@@ -47,6 +61,8 @@ export function NoteRow({ note, showAssign, onAssign }: NoteRowProps) {
           Assign →
         </button>
       )}
+
+      {/* Pin */}
       <button
         onClick={handlePin}
         title={pinned ? 'Unpin' : 'Pin to home'}
@@ -60,7 +76,32 @@ export function NoteRow({ note, showAssign, onAssign }: NoteRowProps) {
           <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
         </svg>
       </button>
-      <span className="text-[11px] text-text-faint flex-shrink-0">{formatRelativeTime(note.updated_at)}</span>
+
+      {/* Delete */}
+      {confirmDelete ? (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleDelete}
+            className="h-6 px-2 text-[11px] font-medium text-white bg-danger rounded-md"
+          >Delete</button>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(false); }}
+            className="h-6 px-2 text-[11px] text-text-muted hover:text-text-secondary rounded-md"
+          >Cancel</button>
+        </div>
+      ) : (
+        <button
+          onClick={handleDelete}
+          title="Delete note"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint opacity-0 group-hover:opacity-100 hover:text-danger hover:bg-danger-bg transition-all duration-120 flex-shrink-0"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+          </svg>
+        </button>
+      )}
+
+      <span className="text-[11px] text-text-faint flex-shrink-0 ml-1">{formatRelativeTime(note.updated_at)}</span>
     </div>
   );
 }

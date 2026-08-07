@@ -42,6 +42,8 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialNote?.widgets || []);
   const [isLocked, setIsLocked] = useState(initialNote?.is_locked ?? false);
   const [content, setContent] = useState<object | null>(() => {
@@ -163,6 +165,14 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
     window.print();
   }
 
+  async function handleDeleteNote() {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeleting(true);
+    await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
+    router.push('/home');
+    router.refresh();
+  }
+
   function handleRestoreVersion(restoredContent: object) {
     setContent(restoredContent);
     scheduleSync(noteId, restoredContent, setAutosave, noteTitle);
@@ -243,6 +253,32 @@ export function NoteEditor({ noteId, initialNote, isNew, initialWidgetType }: No
               <button onClick={handleExportPDF} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Print / PDF</button>
             </div>
           </div>
+
+          {/* Delete */}
+          <div className="w-px h-4 bg-border-default mx-1" />
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleDeleteNote}
+                disabled={deleting}
+                className="h-7 px-2.5 text-[12px] font-medium text-white bg-danger rounded-lg transition-colors"
+              >{deleting ? '…' : 'Delete'}</button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="h-7 px-2.5 text-[12px] text-text-muted hover:text-text-secondary rounded-lg"
+              >Cancel</button>
+            </div>
+          ) : (
+            <button
+              onClick={handleDeleteNote}
+              title="Delete note"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-danger-bg hover:text-danger transition-colors duration-120"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

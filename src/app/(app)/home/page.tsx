@@ -17,13 +17,13 @@ export default async function HomePage() {
   const db = createServerClient();
 
   const [pinnedRes, recentRes, upcomingRes] = await Promise.all([
-    db.from('notes').select('*, space:spaces(*)').eq('user_id', userId).eq('is_pinned_to_home', true).order('updated_at', { ascending: false }).limit(6),
-    db.from('notes').select('*, space:spaces(*)').eq('user_id', userId).order('updated_at', { ascending: false }).limit(10),
-    db.from('widgets').select('*, note:notes(title, id)').eq('user_id', userId).eq('type', 'reminder').order('created_at', { ascending: false }).limit(5),
+    db.from('notes').select('id, title, content, type, tags, updated_at, is_pinned_to_home, space:spaces(id, name, color)').eq('user_id', userId).eq('is_pinned_to_home', true).order('updated_at', { ascending: false }).limit(6),
+    db.from('notes').select('id, title, content, type, tags, updated_at, is_pinned_to_home, space:spaces(id, name, color)').eq('user_id', userId).order('updated_at', { ascending: false }).limit(10),
+    db.from('widgets').select('id, type, content, note:notes(id, title)').eq('user_id', userId).eq('type', 'reminder').order('created_at', { ascending: false }).limit(5),
   ]);
 
-  const pinned: Note[] = pinnedRes.data || [];
-  const recent: Note[] = recentRes.data || [];
+  const pinned: Note[] = (pinnedRes.data || []) as unknown as Note[];
+  const recent: Note[] = (recentRes.data || []) as unknown as Note[];
   const upcoming = upcomingRes.data || [];
   const userName = session.user.name || 'there';
   const today = formatDate(new Date().toISOString());
