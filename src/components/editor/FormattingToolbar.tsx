@@ -1,7 +1,8 @@
 'use client';
 
 import { Editor, useEditorState } from '@tiptap/react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -33,7 +34,25 @@ function ToolbarDivider() {
   return <div className="w-px h-4 bg-border-default flex-shrink-0 mx-0.5" />;
 }
 
-/** Small dropdown anchored under its trigger, closed on outside click / Escape. */
+interface MenuCoords {
+  top: number;
+  left: number;
+  maxHeight: number;
+}
+
+/**
+ * Toolbar dropdown.
+ *
+ * The panel is rendered through a portal with `position: fixed`, NOT as an
+ * absolutely-positioned child of the trigger. The toolbar row is an
+ * `overflow-x: auto` strip, and any absolutely-positioned child of an
+ * overflow container gets clipped by it — which is why these menus previously
+ * appeared to open "underneath" the writing area and could not be used.
+ *
+ * Rule for every menu in this app: portal to `document.body`, position from
+ * the trigger's `getBoundingClientRect()`, and flip above the trigger when
+ * there is not enough room below.
+ */
 function Dropdown({
   label,
   width = 132,
@@ -46,46 +65,119 @@ function Dropdown({
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<MenuCoords | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const GAP = 6;
+    const EDGE = 10;
+    const PREFERRED = 300;
+
+    const roomBelow = window.innerHeight - rect.bottom - GAP - EDGE;
+    const roomAbove = rect.top - GAP - EDGE;
+    // Flip up only when below genuinely cannot hold a usable menu.
+    const flipUp = roomBelow < 150 && roomAbove > roomBelow;
+    const maxHeight = Math.max(120, Math.min(PREFERRED, flipUp ? roomAbove : roomBelow));
+
+    setCoords({
+      top: flipUp ? rect.top - GAP - maxHeight : rect.bottom + GAP,
+      left: Math.min(Math.max(EDGE, rect.left), window.innerWidth - width - EDGE),
+      maxHeight,
+    });
+  }, [width]);
 
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+
+    function onPointerDown(e: Event) {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      setOpen(false);
     }
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
-    document.addEventListener('mousedown', onDown);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    function onScroll(e: Event) {
+      // Scrolling inside the menu itself must not dismiss it.
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    function onResize() { place(); }
+
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
     return () => {
-      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
     };
-  }, [open]);
+  }, [open, place]);
+
+  function toggle() {
+    if (open) { setOpen(false); return; }
+    place();
+    setOpen(true);
+  }
 
   return (
-    <div className="relative flex-shrink-0" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`h-8 px-2 flex items-center justify-between gap-1.5 rounded-lg text-[12px] transition-colors duration-80 ${
+        // Keep the editor selection intact — focus loss would make the block
+        // and font-size commands apply to nothing.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`h-8 px-2 flex items-center justify-between gap-1.5 rounded-lg text-[12px] flex-shrink-0 transition-colors duration-80 ${
           open ? 'bg-accent-blue-bg text-accent-blue-dark' : 'text-text-secondary hover:bg-bg-subtle'
         }`}
         style={{ minWidth: minTriggerWidth }}
       >
         <span className="truncate">{label}</span>
-        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-          <path d="m3 4.5 3 3 3-3"/>
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="flex-shrink-0 transition-transform duration-120"
+          style={{ transform: open ? 'rotate(180deg)' : undefined }}
+        >
+          <path d="m3 4.5 3 3 3-3" />
         </svg>
       </button>
-      {open && (
+
+      {open && coords && typeof document !== 'undefined' && createPortal(
         <div
-          className="absolute left-0 top-full mt-1 bg-bg-base border border-border-default rounded-[10px] py-1 z-50 max-h-[280px] overflow-y-auto"
-          style={{ width, boxShadow: 'var(--shadow-modal)' }}
+          ref={menuRef}
+          role="menu"
+          className="fixed bg-bg-base border border-border-default rounded-[10px] py-1 z-[120] overflow-y-auto animate-fadeIn"
+          style={{
+            top: coords.top,
+            left: coords.left,
+            width,
+            maxHeight: coords.maxHeight,
+            boxShadow: 'var(--shadow-modal)',
+          }}
         >
           {children(() => setOpen(false))}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -165,13 +257,58 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
 
   const currentSize = state.fontSize;
 
+  // Edge fades + chevrons make it obvious the strip scrolls horizontally.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setOverflow({
+      left: el.scrollLeft > 2,
+      right: max > 2 && el.scrollLeft < max - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
   return (
     // The scrolling row and the pinned Add button are siblings, so Add is
     // always reachable instead of being pushed off the end of the scroll area.
     <div
       className={`${position === 'top' ? 'border-b' : 'border-t'} border-border-default bg-bg-base flex items-stretch flex-shrink-0`}
     >
-      <div className="flex-1 min-w-0 h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll">
+      <div className="relative flex-1 min-w-0">
+        {/* Edge fades + chevrons: the strip is scrollable, and it should look it. */}
+        <div className="toolbar-fade toolbar-fade-left" data-visible={overflow.left ? 'true' : 'false'} />
+        <div className="toolbar-fade toolbar-fade-right" data-visible={overflow.right ? 'true' : 'false'} />
+        <svg
+          className="toolbar-hint" style={{ left: 3 }}
+          data-visible={overflow.left ? 'true' : 'false'}
+          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        <svg
+          className="toolbar-hint" style={{ right: 3 }}
+          data-visible={overflow.right ? 'true' : 'false'}
+          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+        <div
+          ref={scrollRef}
+          onScroll={measure}
+          className="h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll"
+        >
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo" disabled={!state.canUndo}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
         </ToolbarButton>
@@ -348,6 +485,7 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
         <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>
         </ToolbarButton>
+      </div>
       </div>
 
       {/* Pinned Add button — never scrolls out of reach */}

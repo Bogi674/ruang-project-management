@@ -24,7 +24,7 @@ export default async function StoreroomPage({ searchParams }: { searchParams: Se
   const items: Note[] = notes || [];
 
   return (
-    <div className="px-11 py-9 max-w-[860px]">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[860px]">
       <div className="mb-6">
         <h1 className="font-serif text-[24px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>
           My Storeroom

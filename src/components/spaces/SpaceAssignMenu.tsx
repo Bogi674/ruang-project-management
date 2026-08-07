@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Space } from '@/types';
+import { fetchSpaces } from '@/lib/spaces';
 
 /** Flatten the space tree so nested spaces are selectable, with indentation. */
 export function flattenSpaces(spaces: Space[], level = 0): Array<Space & { _level: number }> {
@@ -32,10 +33,13 @@ export function SpaceAssignMenu({ currentSpaceId, onSelect, children }: SpaceAss
 
   useEffect(() => {
     if (!open) return;
-    fetch('/api/spaces')
-      .then((r) => r.json())
-      .then((d) => setSpaces(Array.isArray(d) ? d : []))
-      .catch(() => {});
+    // Served from the shared cache when it is already warm, so opening the
+    // menu is instant instead of waiting on a round-trip every time.
+    let cancelled = false;
+    fetchSpaces().then((list) => {
+      if (!cancelled) setSpaces(list);
+    });
+    return () => { cancelled = true; };
   }, [open]);
 
   useEffect(() => {

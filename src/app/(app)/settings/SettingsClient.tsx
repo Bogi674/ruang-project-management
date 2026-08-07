@@ -44,7 +44,7 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
   const { preferences, updatePreferences } = usePreferences();
 
   return (
-    <div className="px-8 md:px-12 py-9 max-w-[720px]">
+    <div className="px-4 py-6 md:px-12 md:py-9 max-w-[720px]">
       <h1 className="font-serif text-[24px] text-text-primary mb-6" style={{ letterSpacing: '-0.02em' }}>
         Settings
       </h1>

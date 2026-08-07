@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Note, Widget, ReminderContent, LinkContent } from '@/types';
-import { extractTitleFromTipTap } from '@/lib/utils';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -104,11 +103,20 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [dragOverPane, setDragOverPane] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(VIEW_KEY) as CalendarViewType | null;
-    if (saved && ['month', 'week', 'workweek', 'day'].includes(saved)) setView(saved);
+    if (saved && ['month', 'week', 'workweek', 'day'].includes(saved)) {
+      setView(saved);
+      return;
+    }
+    // A 7-column time grid is unreadable on a phone, so the first-run default
+    // there is the month grid rather than the desktop week view.
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setView('month');
+    }
   }, []);
 
   useEffect(() => {
@@ -172,6 +180,25 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     }
     setDraggingId(null);
   }, [unscheduled, noteList]);
+
+  /**
+   * Touch has no drag-and-drop, so the mobile sheet assigns a date directly.
+   * Same PATCH the desktop drop performs, just driven by a date input.
+   */
+  const scheduleNote = useCallback(async (noteId: string, dateStr: string) => {
+    if (!dateStr) return;
+    const note = unscheduled.find((n) => n.id === noteId);
+    if (!note) return;
+
+    await fetch(`/api/notes/${noteId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned_date: dateStr }),
+    });
+
+    setNoteList((prev) => [...prev.filter((n) => n.id !== noteId), { ...note, pinned_date: dateStr }]);
+    setUnscheduled((prev) => prev.filter((n) => n.id !== noteId));
+  }, [unscheduled]);
 
   const handleDropOnPane = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -248,7 +275,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
   const notePaneItems: PaneItem[] = unscheduled.map(n => ({
     id: n.id,
     kind: n.type as 'note' | 'checklist',
-    title: n.title || extractTitleFromTipTap(n.content) || 'Untitled',
+    title: n.title || 'Untitled',
     href: `/note/${n.id}`,
     isNote: true,
   }));
@@ -267,7 +294,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
   });
 
   function NoteChip({ note, fromScheduled }: { note: Note; fromScheduled: boolean }) {
-    const title = note.title || extractTitleFromTipTap(note.content) || 'Untitled';
+    const title = note.title || 'Untitled';
     const style = getNoteChipStyle(note.type || 'note');
     return (
       <div
@@ -386,12 +413,94 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     );
   }
 
+  const VIEW_LABELS: Record<CalendarViewType, string> = {
+    day: 'Day',
+    week: 'Week',
+    workweek: 'Work week',
+    month: 'Month',
+  };
+
+  // Week/work-week columns need a floor width or they collapse into slivers on
+  // a phone; below that the whole grid scrolls sideways instead.
+  const gridMinWidth = view === 'week' ? 540 : view === 'workweek' ? 440 : undefined;
+
   return (
-    <div className="flex h-[calc(100vh-52px)] bg-bg-base">
+    <div className="flex bg-bg-base" style={{ height: 'var(--app-content-h)' }}>
       {/* Main calendar */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default flex-shrink-0 bg-bg-base">
+        {/* ── Mobile toolbar: one clean date row, view dropdown underneath ── */}
+        <div className="md:hidden border-b border-border-default flex-shrink-0 bg-bg-base">
+          <div className="flex items-center gap-1 px-3 pt-3">
+            <button
+              onClick={() => navigate(-1)}
+              aria-label="Previous"
+              className="w-9 h-9 flex items-center justify-center text-text-muted rounded-lg active:bg-bg-surface flex-shrink-0"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <h2
+              className="flex-1 min-w-0 text-center font-serif text-[16px] text-text-primary truncate"
+              style={{ letterSpacing: '-0.01em' }}
+            >
+              {headerLabel}
+            </h2>
+            <button
+              onClick={() => navigate(1)}
+              aria-label="Next"
+              className="w-9 h-9 flex items-center justify-center text-text-muted rounded-lg active:bg-bg-surface flex-shrink-0"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            {/* Native select: no overlay to mis-position, and it gives iOS its
+                own picker instead of a cramped in-page menu. */}
+            <div className="relative flex-1 min-w-0">
+              <select
+                value={view}
+                onChange={(e) => changeView(e.target.value as CalendarViewType)}
+                aria-label="Calendar view"
+                className="w-full h-9 pl-3 pr-8 text-[13px] text-text-primary bg-bg-surface border border-border-default rounded-[9px] appearance-none outline-none focus:border-accent-blue transition-colors"
+              >
+                {(['day', 'week', 'workweek', 'month'] as CalendarViewType[]).map((v) => (
+                  <option key={v} value={v}>{VIEW_LABELS[v]}</option>
+                ))}
+              </select>
+              <svg
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+                width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="m3 4.5 3 3 3-3" />
+              </svg>
+            </div>
+
+            <button
+              onClick={goToday}
+              className="h-9 px-3.5 text-[13px] text-text-secondary border border-border-default rounded-[9px] active:bg-bg-surface transition-colors flex-shrink-0"
+            >
+              Today
+            </button>
+
+            <button
+              onClick={() => setSheetOpen(true)}
+              aria-label="Unscheduled items"
+              className="h-9 pl-3 pr-2.5 flex items-center gap-1.5 text-[13px] text-text-secondary border border-border-default rounded-[9px] active:bg-bg-surface transition-colors flex-shrink-0"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/>
+              </svg>
+              {allPaneItems.length > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-accent-green text-accent-green-dark rounded-full">
+                  {allPaneItems.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Desktop toolbar ── */}
+        <div className="hidden md:flex items-center gap-2 px-4 py-3 border-b border-border-default flex-shrink-0 bg-bg-base">
           <button
             onClick={() => navigate(-1)}
             className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-secondary rounded-lg hover:bg-bg-surface transition-colors"
@@ -431,28 +540,6 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
           </div>
         </div>
 
-        {/* Column headers for week/day views */}
-        {view !== 'month' && (
-          <div className="flex flex-shrink-0 border-b border-border-default bg-bg-base">
-            <div className="w-14 flex-shrink-0" />
-            {cells.map((d, i) => {
-              const isToday = toDateStr(d) === todayStr;
-              return (
-                <div key={i} className="flex-1 border-l border-border-light text-center py-2">
-                  <div className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isToday ? 'text-accent-blue-dark font-semibold' : 'text-text-faint'}`}>
-                    {DAY_NAMES[d.getDay()]}
-                  </div>
-                  <div className={`text-[18px] font-light mt-0.5 w-8 h-8 mx-auto flex items-center justify-center rounded-full ${
-                    isToday ? 'bg-accent-blue text-white' : 'text-text-secondary'
-                  }`}>
-                    {d.getDate()}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {/* Calendar body */}
         {view === 'month' ? (
           <div className="flex-1 overflow-auto">
@@ -470,7 +557,31 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
             </div>
           </div>
         ) : (
-          <WeekGrid />
+          // Day columns keep a minimum width and the whole grid — headers and
+          // time rows together — scrolls sideways on narrow screens.
+          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+            <div className="flex flex-col h-full" style={gridMinWidth ? { minWidth: gridMinWidth } : undefined}>
+              <div className="flex flex-shrink-0 border-b border-border-default bg-bg-base">
+                <div className="w-14 flex-shrink-0" />
+                {cells.map((d, i) => {
+                  const isToday = toDateStr(d) === todayStr;
+                  return (
+                    <div key={i} className="flex-1 border-l border-border-light text-center py-2">
+                      <div className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isToday ? 'text-accent-blue-dark font-semibold' : 'text-text-faint'}`}>
+                        {DAY_NAMES[d.getDay()]}
+                      </div>
+                      <div className={`text-[18px] font-light mt-0.5 w-8 h-8 mx-auto flex items-center justify-center rounded-full ${
+                        isToday ? 'bg-accent-blue text-white' : 'text-text-secondary'
+                      }`}>
+                        {d.getDate()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <WeekGrid />
+            </div>
+          </div>
         )}
       </div>
 
@@ -594,6 +705,128 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
           </>
         )}
       </aside>
+
+      {/* ── Mobile unscheduled sheet ──
+          A bottom sheet rather than a side pane: it overlays the grid instead
+          of stealing width from it, and it clears the tab bar's safe area.
+          Items are scheduled with a date input, since touch has no DnD. */}
+      {sheetOpen && (
+        <div className="md:hidden fixed inset-0 z-[60] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={() => setSheetOpen(false)} />
+          <div
+            className="relative bg-bg-base rounded-t-[18px] shadow-modal flex flex-col animate-fadeUp"
+            style={{ maxHeight: '72vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="flex items-center gap-2 px-4 pt-3 pb-2 flex-shrink-0">
+              <span className="absolute left-1/2 -translate-x-1/2 top-1.5 w-9 h-1 rounded-full bg-border-medium" />
+              <div className="flex items-center gap-2 flex-1 mt-2">
+                <span className="text-[14px] font-semibold text-text-primary">Unscheduled</span>
+                {allPaneItems.length > 0 && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-accent-green text-accent-green-dark rounded-full">
+                    {allPaneItems.length}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setSheetOpen(false)}
+                aria-label="Close"
+                className="w-8 h-8 mt-2 flex items-center justify-center text-text-muted rounded-lg active:bg-bg-surface"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-4 pb-3 flex-shrink-0 space-y-2.5">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search unscheduled…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-9 pr-3 text-[15px] rounded-[10px] border border-border-medium bg-bg-surface placeholder:text-text-faint text-text-primary outline-none focus:border-accent-blue transition-colors"
+                />
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto toolbar-scroll">
+                {(['all', 'notes', 'checklists', 'widgets'] as FilterType[]).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`text-[12px] px-3 py-1.5 rounded-full border flex-shrink-0 transition-colors ${
+                      filter === f
+                        ? 'bg-accent-blue text-white border-accent-blue'
+                        : 'border-border-default text-text-muted bg-bg-surface'
+                    }`}
+                  >
+                    {f === 'widgets' ? 'Widgets' : f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+              {filteredPaneItems.length === 0 ? (
+                <p className="text-[13px] text-text-faint text-center py-8">
+                  {searchQuery ? `Nothing found for "${searchQuery}"` : "Nothing here. That's a good sign."}
+                </p>
+              ) : (
+                filteredPaneItems.map(item => {
+                  const style = getPaneItemStyle(item.kind);
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] border"
+                      style={{ background: style.bg, borderColor: style.border }}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: style.dot }} />
+                      <Link
+                        href={item.href}
+                        onClick={() => setSheetOpen(false)}
+                        className="flex-1 min-w-0 text-[13.5px] font-medium truncate no-underline"
+                        style={{ color: style.text }}
+                      >
+                        {item.title}
+                      </Link>
+                      {item.isNote ? (
+                        <label
+                          className="relative w-9 h-9 flex items-center justify-center rounded-lg flex-shrink-0 active:bg-black/5"
+                          style={{ color: style.text }}
+                          title="Pick a date"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                          </svg>
+                          <input
+                            type="date"
+                            aria-label={`Schedule ${item.title}`}
+                            defaultValue={todayStr}
+                            onChange={(e) => scheduleNote(item.id, e.target.value)}
+                            className="absolute inset-0 opacity-0"
+                          />
+                        </label>
+                      ) : (
+                        <span className="text-[10px] capitalize flex-shrink-0" style={{ color: style.dot }}>
+                          {item.kind}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {filteredPaneItems.some(i => i.isNote) && (
+              <p className="px-4 pb-3 text-[11px] text-text-faint flex-shrink-0">
+                Tap the calendar icon on a note to give it a date.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

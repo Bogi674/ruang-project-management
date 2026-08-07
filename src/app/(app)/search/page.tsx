@@ -30,7 +30,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
   }
 
   return (
-    <div className="px-11 py-9 max-w-[720px]">
+    <div className="px-4 py-6 md:px-11 md:py-9 max-w-[720px]">
       <h1 className="font-serif text-[24px] text-text-primary mb-6" style={{ letterSpacing: '-0.02em' }}>Search</h1>
 
       <form method="get" action="/search" className="mb-6">
