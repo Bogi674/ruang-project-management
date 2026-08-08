@@ -383,8 +383,8 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
           placeholder="Untitled"
           disabled={isLocked}
           rows={1}
-          className="w-full resize-none overflow-hidden font-serif text-[26px] md:text-[32px] text-text-primary bg-transparent border-none outline-none placeholder:text-text-faint leading-tight disabled:cursor-not-allowed"
-          style={{ letterSpacing: '-0.025em', lineHeight: 1.2 }}
+          className="w-full resize-none overflow-hidden font-sans font-semibold text-[26px] md:text-[32px] bg-transparent border-none outline-none placeholder:text-text-faint placeholder:font-normal leading-tight disabled:cursor-not-allowed"
+          style={{ letterSpacing: '-0.025em', lineHeight: 1.2, color: 'var(--heading-color)' }}
         />
 
         {/* Metadata row */}

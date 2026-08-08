@@ -13,10 +13,12 @@ interface SettingsClientProps {
   isGoogleUser?: boolean;
 }
 
+// "System" is gone: the dark palette only reaches the CSS custom properties,
+// not the Tailwind colors, so inheriting the OS setting produced a half-dark
+// app. Dark is an explicit choice until the two palettes are unified.
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
 ];
 
 const TYPOGRAPHY_OPTIONS = [
@@ -345,7 +347,9 @@ function AppearanceTab({
         <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-4">Theme</p>
         <div className="flex gap-2">
           {THEME_OPTIONS.map(({ value, label }) => {
-            const active = (preferences.theme_preference || 'system') === value;
+            // Anything previously stored as "system" now reads as Light,
+            // matching what applyPreferences actually renders.
+            const active = (preferences.theme_preference === 'dark' ? 'dark' : 'light') === value;
             return (
               <button
                 key={value}

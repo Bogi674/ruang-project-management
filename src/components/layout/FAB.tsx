@@ -80,7 +80,9 @@ const FAB_ITEMS: FabEntry[] = [
   },
 ];
 
-export function FAB() {
+/** `hideOnMobile` drops the button on phones only — the note editor is
+ *  full-screen there, and a fixed FAB would sit over the keyboard. */
+export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const router = useRouter();
@@ -128,7 +130,7 @@ export function FAB() {
     // clears the bar (and the iOS home indicator) instead of overlapping it.
     <div
       ref={ref}
-      className="fixed z-50 right-5 md:right-7"
+      className={`fixed z-50 right-5 md:right-7 ${hideOnMobile ? 'hidden md:block' : ''}`}
       style={{ bottom: 'var(--fab-bottom)' }}
     >
       {open && !isLoading && (
