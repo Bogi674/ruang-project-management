@@ -50,12 +50,20 @@ export function applyPreferences(prefs: Partial<UserPreferences>) {
     root.style.setProperty('--accent-blue-bg', lightBg(hex));
   }
 
-  const resolveTheme = (pref: string | null) => {
-    if (pref === 'dark') return 'dark';
-    if (pref === 'light') return 'light';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-  root.setAttribute('data-theme', resolveTheme(prefs.theme_preference ?? null));
+  /*
+   * Dark theme is opt-in only — never inherited from the OS.
+   *
+   * The palette lives in two places that do not move together: the CSS custom
+   * properties in globals.css (which `[data-theme="dark"]` flips) and the
+   * hard-coded hex values in tailwind.config.ts (which it cannot touch). So a
+   * phone in system dark mode used to get a half-dark app: the page stayed
+   * white because Tailwind painted it, while the few rules that read the vars
+   * directly went dark — near-white editor headings on white paper, and black
+   * gradient blocks in the formatting toolbar. Until the Tailwind palette is
+   * driven by the same vars, only an explicit choice may set the attribute.
+   */
+  const theme = prefs.theme_preference === 'dark' ? 'dark' : 'light';
+  root.setAttribute('data-theme', theme);
 
   const density = prefs.density_preference || 'comfortable';
   root.setAttribute('data-density', density);

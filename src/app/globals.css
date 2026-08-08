@@ -55,8 +55,10 @@
      * so the FAB can never land on top of the bar the way it did when each
      * component hard-coded its own offset.
      */
-    --tabbar-h: 56px;
-    --tabbar-total: calc(56px + env(safe-area-inset-bottom));
+    /* 49px matches the iOS native/Twitter bottom bar: the bar itself is short,
+       and the home-indicator inset is added on top rather than baked in. */
+    --tabbar-h: 49px;
+    --tabbar-total: calc(49px + env(safe-area-inset-bottom));
     --fab-bottom: calc(var(--tabbar-total) + 16px);
     /* Viewport minus the mobile header and the tab bar — used by full-height
        screens (calendar) so they never scroll behind the chrome. */
@@ -179,27 +181,30 @@
   height: 0;
 }
 
-.tiptap-editor .ProseMirror h1 {
-  font-family: 'Newsreader', Georgia, serif;
-  font-size: 24px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+/*
+ * Editor headings are sans-serif and near-black. The sans stack is written out
+ * rather than inherited from --font-body so the serif typography preference
+ * cannot pull headings back into Newsreader.
+ */
+.tiptap-editor .ProseMirror h1,
+.tiptap-editor .ProseMirror h2,
+.tiptap-editor .ProseMirror h3 {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--heading-color);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.tiptap-editor .ProseMirror h1 {
+  font-size: 24px;
   margin-bottom: 0.3em;
 }
 .tiptap-editor .ProseMirror h2 {
-  font-family: 'Newsreader', Georgia, serif;
   font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--heading-color);
   margin-bottom: 0.25em;
 }
 .tiptap-editor .ProseMirror h3 {
-  font-family: 'Newsreader', Georgia, serif;
   font-size: 17px;
-  font-weight: 500;
-  color: var(--heading-color);
+  letter-spacing: -0.01em;
   margin-bottom: 0.2em;
 }
 
@@ -291,7 +296,12 @@
   text-underline-offset: 2px;
 }
 
-/* Toolbar scrollbar hide */
+/*
+ * Toolbar scroll strip. Deliberately plain: the edge fades and chevron hints
+ * that used to sit on top of this were gradient overlays painted from
+ * var(--bg-base), which rendered as black blocks whenever the dark tokens were
+ * live. A scrollbar-less horizontal strip is enough of an affordance.
+ */
 .toolbar-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -300,49 +310,6 @@
   overscroll-behavior-x: contain;
 }
 .toolbar-scroll::-webkit-scrollbar { display: none; }
-
-/*
- * Scroll affordance for the formatting toolbar: a soft fade on whichever side
- * still has content, so it reads as a scrollable strip at a glance.
- */
-.toolbar-fade {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 34px;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-.toolbar-fade[data-visible='true'] { opacity: 1; }
-.toolbar-fade-left {
-  left: 0;
-  background: linear-gradient(to right, var(--bg-base) 25%, rgba(255, 255, 255, 0));
-}
-.toolbar-fade-right {
-  right: 0;
-  background: linear-gradient(to left, var(--bg-base) 25%, rgba(255, 255, 255, 0));
-}
-:root[data-theme='dark'] .toolbar-fade-left {
-  background: linear-gradient(to right, var(--bg-base) 25%, rgba(28, 33, 48, 0));
-}
-:root[data-theme='dark'] .toolbar-fade-right {
-  background: linear-gradient(to left, var(--bg-base) 25%, rgba(28, 33, 48, 0));
-}
-
-/* Chevron hint that sits on top of the fade while more toolbar remains. */
-.toolbar-hint {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  pointer-events: none;
-  color: var(--text-faint);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-.toolbar-hint[data-visible='true'] { opacity: 1; }
 
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

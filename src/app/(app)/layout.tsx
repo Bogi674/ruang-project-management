@@ -103,15 +103,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             userName={user.name || ''}
             userEmail={user.email || ''}
           />
-          {/* Bottom tab bar stays visible inside the note editor so navigation
-              is always reachable; padding matches the bar + safe-area inset. */}
-          <main className="pt-14 min-h-screen" style={{ paddingBottom: 'var(--tabbar-total)' }}>
+          {/*
+            The note editor is full-screen on mobile: no tab bar, no FAB. Both
+            are fixed elements, so while the keyboard is up they float over the
+            writing area and appear to ride along with the page as it scrolls.
+            Reserve bottom padding only when the bar is actually there.
+          */}
+          <main className="pt-14 min-h-screen" style={{ paddingBottom: isNote ? 0 : 'var(--tabbar-total)' }}>
             <div className="animate-fadeUp">{children}</div>
           </main>
-          <MobileTabBar />
+          {!isNote && <MobileTabBar />}
         </div>
 
-        <FAB />
+        <FAB hideOnMobile={isNote} />
 
         {showShortcuts && <KeyboardShortcutsPanel onClose={() => setShowShortcuts(false)} />}
       </div>

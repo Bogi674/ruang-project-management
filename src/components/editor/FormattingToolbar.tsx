@@ -257,58 +257,15 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
 
   const currentSize = state.fontSize;
 
-  // Edge fades + chevrons make it obvious the strip scrolls horizontally.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = useState({ left: false, right: false });
-
-  const measure = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const max = el.scrollWidth - el.clientWidth;
-    setOverflow({
-      left: el.scrollLeft > 2,
-      right: max > 2 && el.scrollLeft < max - 2,
-    });
-  }, []);
-
-  useEffect(() => {
-    measure();
-    const el = scrollRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [measure]);
-
   return (
     // The scrolling row and the pinned Add button are siblings, so Add is
     // always reachable instead of being pushed off the end of the scroll area.
     <div
       className={`${position === 'top' ? 'border-b' : 'border-t'} border-border-default bg-bg-base flex items-stretch flex-shrink-0`}
     >
-      <div className="relative flex-1 min-w-0">
-        {/* Edge fades + chevrons: the strip is scrollable, and it should look it. */}
-        <div className="toolbar-fade toolbar-fade-left" data-visible={overflow.left ? 'true' : 'false'} />
-        <div className="toolbar-fade toolbar-fade-right" data-visible={overflow.right ? 'true' : 'false'} />
-        <svg
-          className="toolbar-hint" style={{ left: 3 }}
-          data-visible={overflow.left ? 'true' : 'false'}
-          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-        <svg
-          className="toolbar-hint" style={{ right: 3 }}
-          data-visible={overflow.right ? 'true' : 'false'}
-          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-        >
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-        <div
-          ref={scrollRef}
-          onScroll={measure}
-          className="h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll"
-        >
+      <div className="flex-1 min-w-0">
+        {/* Plain scrolling strip — no edge fades or chevron hints. */}
+        <div className="h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll">
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo" disabled={!state.canUndo}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
         </ToolbarButton>
@@ -335,8 +292,8 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
                   onClick={() => { editor.chain().focus().toggleHeading({ level }).run(); close(); }}
                 >
                   <span
-                    className="font-serif text-text-primary"
-                    style={{ fontSize: level === 1 ? 19 : level === 2 ? 16.5 : 14.5 }}
+                    className="font-sans font-semibold text-text-primary"
+                    style={{ fontSize: level === 1 ? 17 : level === 2 ? 15.5 : 14 }}
                   >
                     Heading {level}
                   </span>

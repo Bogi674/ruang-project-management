@@ -10,7 +10,7 @@ interface Tab {
   icon: (active: boolean) => React.ReactNode;
 }
 
-const SIZE = 21;
+const SIZE = 20;
 
 const TABS: Tab[] = [
   {
@@ -104,14 +104,14 @@ export function MobileTabBar() {
             key={tab.href}
             href={tab.href}
             aria-current={active ? 'page' : undefined}
-            // Even padding above and below the icon+label stack, so the row sits
-            // optically centred in the bar rather than riding its top edge.
-            className={`flex-1 flex flex-col items-center justify-center gap-[3px] py-2 no-underline transition-colors duration-120 ${
+            // The stack is centred in the 49px bar with no vertical padding of
+            // its own — padding here is what made the bar read as tall.
+            className={`flex-1 flex flex-col items-center justify-center gap-[2px] no-underline transition-colors duration-120 ${
               active ? 'text-accent-blue-dark' : 'text-text-muted'
             }`}
           >
             {tab.icon(!!active)}
-            <span className="text-[10px] leading-none" style={{ fontWeight: active ? 600 : 400 }}>
+            <span className="text-[9.5px] leading-none" style={{ fontWeight: active ? 600 : 400 }}>
               {tab.label}
             </span>
           </Link>
