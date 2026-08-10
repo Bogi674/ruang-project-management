@@ -462,34 +462,59 @@
 }
 
 /* Lined
- * A 1px rule anchored to each text block via border-bottom.
- * This replaces the old repeating background-image approach which drifted
- * because CSS pixels are fixed while element heights vary with content,
- * margins, and density — making alignment impossible to maintain over a
- * full page of mixed content.
+ * Uses ::after pseudo-elements instead of border-bottom so lines always
+ * span the full width of the text area regardless of indentation level.
  *
- * border-bottom attaches to the element itself, so the line always sits
- * directly below each paragraph or list item regardless of its height.
- * Paragraphs, headings, blockquotes, and list items are targeted
- * individually so the containing <ul>/<ol> does not get a double line.
+ * The problem with border-bottom: it is confined to the element's own box.
+ * An indented li inside an ol/ul inherits the ol's padding-left offset, so
+ * its border-bottom starts at the indent, not at the left edge of the editor.
+ *
+ * The fix: give each element position:relative so its ::after is positioned
+ * relative to it, then extend ::after far left (left: -2000px) to break out
+ * of any indentation. overflow-x: clip on ProseMirror clips that extension
+ * back to the content area edge. padding-right: 10px on ProseMirror creates
+ * a small gap so lines never run into the scrollbar.
  */
+[data-surface="lined"] .tiptap-editor .ProseMirror {
+  overflow-x: clip;
+  padding-right: 10px;
+}
+
 [data-surface="lined"] .tiptap-editor .ProseMirror > p,
 [data-surface="lined"] .tiptap-editor .ProseMirror > h1,
 [data-surface="lined"] .tiptap-editor .ProseMirror > h2,
 [data-surface="lined"] .tiptap-editor .ProseMirror > h3,
 [data-surface="lined"] .tiptap-editor .ProseMirror > blockquote,
 [data-surface="lined"] .tiptap-editor .ProseMirror li {
-  border-bottom: 1px solid rgba(0,0,0,0.11);
+  position: relative;
 }
 
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > p,
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h1,
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h2,
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h3,
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > blockquote,
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror li {
-  border-bottom: 1px solid rgba(255,255,255,0.11);
+[data-surface="lined"] .tiptap-editor .ProseMirror > p::after,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h1::after,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h2::after,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h3::after,
+[data-surface="lined"] .tiptap-editor .ProseMirror > blockquote::after,
+[data-surface="lined"] .tiptap-editor .ProseMirror li::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: -2000px;   /* breaks out of any indentation depth; clipped by overflow-x:clip */
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(0,0,0,0.11);
+  pointer-events: none;
 }
+
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > p::after,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h1::after,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h2::after,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h3::after,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > blockquote::after,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror li::after {
+  background: rgba(255,255,255,0.11);
+}
+
 
 /* ── Space color wash ──
  * A full-bleed gradient header behind each space page's content.
