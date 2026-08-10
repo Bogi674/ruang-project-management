@@ -439,10 +439,12 @@
  * a text glyph. background-attachment: local keeps the grid locked
  * to the content as the user scrolls — alignment never drifts.
  *
- * Dot: 0.8px radius, rgba at 9 % — visible but not competing with text.
+ * Dot: 1px radius, rgba at 15 % — subtle but actually visible on all displays.
+ * Sub-pixel radii (< 1px) antialiase to nothing on 1x screens, so 1px is the
+ * minimum reliable size regardless of opacity.
  */
 [data-surface="dotgrid"] .tiptap-editor .ProseMirror {
-  background-image: radial-gradient(circle, rgba(0,0,0,0.09) 0.8px, transparent 0.8px);
+  background-image: radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px);
   background-size: 26px 26px;
   background-position: 13px 1px;
   background-attachment: local;
@@ -454,9 +456,9 @@
   }
 }
 
-/* Dark theme dots — slightly lighter so they show on dark bg without glare. */
+/* Dark theme dots — white at 13% so they read on a dark background. */
 [data-theme="dark"][data-surface="dotgrid"] .tiptap-editor .ProseMirror {
-  background-image: radial-gradient(circle, rgba(255,255,255,0.1) 0.8px, transparent 0.8px);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.13) 1px, transparent 1px);
 }
 
 /* Lined
@@ -469,8 +471,8 @@
   background-image: linear-gradient(
     to bottom,
     transparent 24px,
-    rgba(0,0,0,0.07) 24px,
-    rgba(0,0,0,0.07) 25px,
+    rgba(0,0,0,0.11) 24px,
+    rgba(0,0,0,0.11) 25px,
     transparent 25px
   );
   background-size: 100% 26px;
@@ -487,8 +489,8 @@
   background-image: linear-gradient(
     to bottom,
     transparent 24px,
-    rgba(255,255,255,0.08) 24px,
-    rgba(255,255,255,0.08) 25px,
+    rgba(255,255,255,0.11) 24px,
+    rgba(255,255,255,0.11) 25px,
     transparent 25px
   );
 }
