@@ -6,9 +6,16 @@ export const metadata: Metadata = {
   title: 'Ruang',
   description: 'Your personal note space',
   manifest: '/manifest.json',
+  // White-canvas icon set: dark mark on a rounded white square. Used for the
+  // browser tab, the PWA/desktop install and the iOS home screen alike.
   icons: {
-    icon: '/logo/ruang_logo.png',
-    apple: '/logo/ruang_logo.png',
+    icon: [
+      { url: '/logo/ruang-icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo/ruang-icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/logo/ruang-icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/logo/ruang-icon-32.png',
+    apple: '/logo/ruang-icon-192.png',
   },
   appleWebApp: {
     capable: true,
@@ -38,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400&display=swap"
           rel="stylesheet"
         />
-        <link rel="apple-touch-icon" href="/logo/ruang_logo.png" />
+        <link rel="apple-touch-icon" href="/logo/ruang-icon-192.png" />
       </head>
       <body>
         <Providers>{children}</Providers>

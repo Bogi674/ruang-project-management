@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Space } from '@/types';
 import { SpaceModal } from '@/components/spaces/SpaceModal';
+import { SpaceNoteList } from '@/components/layout/SpaceNoteList';
 import { useSpaces } from '@/lib/spaces';
 import {
   isNoteDrag,
@@ -44,6 +45,9 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
   const [open, setOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const hasChildren = !!space.children && space.children.length > 0;
+  const noteCount = space.note_count ?? 0;
+  // A space is expandable when it holds anything at all — sub-spaces or notes.
+  const hasContents = hasChildren || noteCount > 0;
   const dotSize = level === 0 ? 7 : level === 1 ? 6 : 5;
   const canAddChild = (space.depth ?? 0) < 2;
   const isPinned = pinnedIds.includes(space.id);
@@ -55,7 +59,7 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
     e.dataTransfer.dropEffect = 'move';
     setDropActive(true);
     // Auto-expand so the user can drop into a nested space mid-drag.
-    if (hasChildren && !open) setOpen(true);
+    if (hasContents && !open) setOpen(true);
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -84,7 +88,7 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
         }}
         onDrop={handleDrop}
       >
-        {hasChildren ? (
+        {hasContents ? (
           <button
             onClick={() => setOpen(!open)}
             className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text-secondary flex-shrink-0"
@@ -106,6 +110,9 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
         >
           <span className="rounded-full flex-shrink-0" style={{ width: dotSize, height: dotSize, background: space.color || '#738290' }} />
           <span className="truncate">{space.icon && `${space.icon} `}{space.name}</span>
+          {noteCount > 0 && !isPinned && (
+            <span className="ml-auto text-[10px] text-text-faint flex-shrink-0 tabular-nums">{noteCount}</span>
+          )}
           {isPinned && (
             <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-accent-amber ml-auto">
               <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
@@ -137,9 +144,12 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
           </button>
         </div>
       </div>
-      {open && hasChildren && (
+      {/* Expanded: sub-spaces first, then this space's own notes. Opening a
+          note from here goes straight to it; the space page is unchanged and
+          still reachable by clicking the space name. */}
+      {open && hasContents && (
         <ul className="ml-4 mt-0.5 space-y-0.5">
-          {space.children!.map((child) => (
+          {(space.children || []).map((child) => (
             <SpaceItem
               key={child.id}
               space={child}
@@ -150,6 +160,7 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
               onDropNote={onDropNote}
             />
           ))}
+          {noteCount > 0 && <SpaceNoteList spaceId={space.id} />}
         </ul>
       )}
     </li>
@@ -199,14 +210,22 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
     setPinnedIdsState(getPinnedIds());
   }, []);
 
-  useEffect(() => { refreshCount(); }, [pathname, refreshCount]);
-
-  // Refresh the badge when a note is moved or deleted anywhere in the app.
+  // Space note counts drive the expand chevrons, so they follow the same
+  // refresh cadence as the storeroom badge.
   useEffect(() => {
-    function onChanged() { refreshCount(); }
+    refreshCount();
+    refreshSpaces();
+  }, [pathname, refreshCount, refreshSpaces]);
+
+  // Refresh when a note is moved or deleted anywhere in the app.
+  useEffect(() => {
+    function onChanged() {
+      refreshCount();
+      refreshSpaces();
+    }
     window.addEventListener(NOTES_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(NOTES_CHANGED_EVENT, onChanged);
-  }, [refreshCount]);
+  }, [refreshCount, refreshSpaces]);
 
   // Close the space menu on outside click / escape / scroll.
   useEffect(() => {

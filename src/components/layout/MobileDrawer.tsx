@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Space } from '@/types';
 import { Logo } from './Logo';
 import { SpaceModal } from '@/components/spaces/SpaceModal';
+import { SpaceNoteList } from './SpaceNoteList';
 import { emitNotesChanged } from '@/lib/dnd';
 import { useSpaces } from '@/lib/spaces';
 
@@ -30,15 +31,34 @@ interface SpaceRowProps {
   onAddChild: (s: Space) => void;
   onDelete: (s: Space) => void;
   manageMode: boolean;
+  onNavigate: () => void;
 }
 
-function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode }: SpaceRowProps) {
+function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode, onNavigate }: SpaceRowProps) {
   const children = space.children || [];
+  const noteCount = space.note_count ?? 0;
+  const [showNotes, setShowNotes] = useState(false);
+
   return (
     <>
       <div className="flex items-center gap-1" style={{ paddingLeft: level * 14 }}>
+        {noteCount > 0 && !manageMode ? (
+          <button
+            onClick={() => setShowNotes((v) => !v)}
+            className="w-6 h-8 flex items-center justify-center text-text-muted flex-shrink-0"
+            aria-label={showNotes ? `Hide notes in ${space.name}` : `Show notes in ${space.name}`}
+            aria-expanded={showNotes}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" style={{ transform: showNotes ? 'rotate(90deg)' : '', transition: 'transform 0.12s' }}>
+              <path d="M2 1l4 3-4 3V1z" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-6 flex-shrink-0" />
+        )}
         <Link
           href={`/space/${space.id}`}
+          onClick={onNavigate}
           className="flex-1 min-w-0 flex items-center gap-3 py-2.5 text-14 text-text-secondary no-underline active:text-text-primary"
         >
           <span
@@ -46,6 +66,9 @@ function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode }: Sp
             style={{ background: space.color || '#738290' }}
           />
           <span className="truncate">{space.icon && `${space.icon} `}{space.name}</span>
+          {noteCount > 0 && (
+            <span className="ml-auto text-[11px] text-text-faint flex-shrink-0 tabular-nums">{noteCount}</span>
+          )}
         </Link>
         {manageMode && (
           <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -81,6 +104,11 @@ function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode }: Sp
           </div>
         )}
       </div>
+      {showNotes && noteCount > 0 && (
+        <ul style={{ paddingLeft: level * 14 }}>
+          <SpaceNoteList spaceId={space.id} onNavigate={onNavigate} />
+        </ul>
+      )}
       {children.map((c) => (
         <SpaceRow
           key={c.id}
@@ -90,6 +118,7 @@ function SpaceRow({ space, level, onEdit, onAddChild, onDelete, manageMode }: Sp
           onAddChild={onAddChild}
           onDelete={onDelete}
           manageMode={manageMode}
+          onNavigate={onNavigate}
         />
       ))}
     </>
@@ -218,6 +247,7 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
                   onAddChild={openAddChild}
                   onDelete={requestDelete}
                   manageMode={manageMode}
+                  onNavigate={onClose}
                 />
               ))
             )}

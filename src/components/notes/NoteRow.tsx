@@ -103,7 +103,7 @@ export function NoteRow({
       <Link href={`/note/${note.id}`} className="flex-1 min-w-0 no-underline">
         <p className="text-[13.5px] text-text-primary truncate">{title}</p>
       </Link>
-      {note.space && <TagChip label={note.space.name} variant="green" size="sm" />}
+      {note.space && <TagChip label={note.space.name} size="sm" color={note.space.color} showDot />}
       {note.tags?.[0] && !note.space && <TagChip label={note.tags[0]} variant="blue" size="sm" />}
 
       {/* Move to space */}

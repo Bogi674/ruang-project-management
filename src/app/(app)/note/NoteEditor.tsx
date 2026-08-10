@@ -12,6 +12,9 @@ import { ReminderWidget } from '@/components/widgets/ReminderWidget';
 import { FileWidget } from '@/components/widgets/FileWidget';
 import { LinkWidget } from '@/components/widgets/LinkWidget';
 import { AutosaveIndicator } from '@/components/layout/AutosaveIndicator';
+import { DatePickerPopover } from '@/components/ui/DatePickerPopover';
+import { noteToMarkdown, noteToPlainText, exportFilename, downloadTextFile } from '@/lib/export';
+import { spaceChipStyle } from '@/lib/spaceColor';
 import { scheduleSync, loadDraftFull, flushNote, cancelSync, installFlushHooks } from '@/lib/autosave';
 import { emitNotesChanged } from '@/lib/dnd';
 import { useSpaces } from '@/lib/spaces';
@@ -76,6 +79,9 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialNote?.space_id || null);
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [pinnedDate, setPinnedDate] = useState<string>(initialNote?.pinned_date ?? '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showMobileExport, setShowMobileExport] = useState(false);
+  const dateChipRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const createdAt = initialNote?.created_at || new Date().toISOString();
 
@@ -231,19 +237,19 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     });
   }
 
+  // Exports read the live editor state, so an unsynced edit is included.
+  function resolvedTitle() {
+    return noteTitle.trim() || defaultTitle(createdAt);
+  }
+
   function handleExportText() {
-    if (!content) return;
-    const doc = content as { content?: Array<{ type: string; content?: Array<{ text?: string }> }> };
-    const text = (doc.content || [])
-      .map((node) => (node.content || []).map((n) => n.text || '').join(''))
-      .join('\n');
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${noteTitle || 'note'}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const title = resolvedTitle();
+    downloadTextFile(exportFilename(title, 'txt'), noteToPlainText(title, content), 'text/plain');
+  }
+
+  function handleExportMarkdown() {
+    const title = resolvedTitle();
+    downloadTextFile(exportFilename(title, 'md'), noteToMarkdown(title, content), 'text/markdown');
   }
 
   function handleExportPDF() {
@@ -297,15 +303,40 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
             <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
           </svg>
         </button>
-        <button
-          onClick={handleExportText}
-          aria-label="Export as text"
-          className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowMobileExport((v) => !v)}
+            aria-label="Export note"
+            aria-expanded={showMobileExport}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          {showMobileExport && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setShowMobileExport(false)} />
+              <div
+                className="absolute right-0 top-full mt-1 w-44 bg-bg-base border border-border-default rounded-[10px] py-1 z-30"
+                style={{ boxShadow: 'var(--shadow-modal)' }}
+              >
+                <button
+                  onClick={() => { setShowMobileExport(false); handleExportMarkdown(); }}
+                  className="w-full text-left px-3 py-2 text-[13px] text-text-secondary"
+                >Markdown (.md)</button>
+                <button
+                  onClick={() => { setShowMobileExport(false); handleExportText(); }}
+                  className="w-full text-left px-3 py-2 text-[13px] text-text-secondary"
+                >Plain text (.txt)</button>
+                <button
+                  onClick={() => { setShowMobileExport(false); handleExportPDF(); }}
+                  className="w-full text-left px-3 py-2 text-[13px] text-text-secondary"
+                >Print / PDF</button>
+              </div>
+            </>
+          )}
+        </div>
         {confirmDelete ? (
           <div className="flex items-center gap-1">
             <button
@@ -400,7 +431,8 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
             </button>
             <div className="absolute right-0 top-full mt-1 w-36 bg-bg-base border border-border-default rounded-[10px] py-1 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-120"
               style={{ boxShadow: 'var(--shadow-modal)' }}>
-              <button onClick={handleExportText} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Plain text</button>
+              <button onClick={handleExportMarkdown} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Markdown (.md)</button>
+              <button onClick={handleExportText} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Plain text (.txt)</button>
               <button onClick={handleExportPDF} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Print / PDF</button>
             </div>
           </div>
@@ -462,9 +494,12 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
           <div className="relative">
             <button
               onClick={() => !isLocked && setShowSpacePicker(v => !v)}
+              // The chip carries the space's own colour, so a note's space is
+              // recognisable at a glance rather than always reading green.
+              style={selectedSpace ? spaceChipStyle(selectedSpace.color) : undefined}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-120 border ${
                 selectedSpace
-                  ? 'bg-accent-green text-accent-green-dark border-accent-green-mid'
+                  ? ''
                   : 'bg-bg-surface text-text-muted border-border-light hover:border-border-medium'
               } ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             >
@@ -475,7 +510,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
                   {!isLocked && (
                     <span
                       onClick={(e) => { e.stopPropagation(); handleSpaceSelect(null); }}
-                      className="ml-0.5 text-accent-green-dark hover:text-danger"
+                      className="ml-0.5 hover:text-danger"
                     >
                       ×
                     </span>
@@ -518,11 +553,15 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
             )}
           </div>
 
-          {/* Date chip — assigning a date puts the note on the Calendar.
-              The native date input sits invisibly on top of the chip so every
-              browser opens its own picker without a bespoke popover. */}
-          <div className="relative flex-shrink-0">
-            <span
+          {/* Date chip — assigning a date puts the note on the Calendar. */}
+          <div className="flex-shrink-0">
+            <button
+              ref={dateChipRef}
+              type="button"
+              onClick={() => !isLocked && setShowDatePicker((v) => !v)}
+              disabled={isLocked}
+              aria-haspopup="dialog"
+              aria-expanded={showDatePicker}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-120 border ${
                 pinnedDate
                   ? 'bg-accent-blue-bg text-accent-blue-dark border-accent-blue'
@@ -537,24 +576,32 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
               </svg>
               {pinnedDate ? formatChipDate(pinnedDate) : 'Set date'}
               {pinnedDate && !isLocked && (
-                <button
-                  type="button"
+                <span
+                  role="button"
+                  tabIndex={0}
                   aria-label="Clear date"
-                  onClick={() => handlePinnedDateChange('')}
-                  className="relative z-10 ml-0.5 text-accent-blue-dark hover:text-danger"
+                  onClick={(e) => { e.stopPropagation(); handlePinnedDateChange(''); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handlePinnedDateChange('');
+                    }
+                  }}
+                  className="ml-0.5 text-accent-blue-dark hover:text-danger"
                 >
                   ×
-                </button>
+                </span>
               )}
-            </span>
-            <input
-              type="date"
-              aria-label="Assign a date"
-              value={pinnedDate}
-              disabled={isLocked}
-              onChange={(e) => handlePinnedDateChange(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-            />
+            </button>
+            {showDatePicker && (
+              <DatePickerPopover
+                value={pinnedDate}
+                anchorRef={dateChipRef}
+                onChange={handlePinnedDateChange}
+                onClose={() => setShowDatePicker(false)}
+              />
+            )}
           </div>
         </div>
       </div>

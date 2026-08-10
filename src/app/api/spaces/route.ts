@@ -7,15 +7,22 @@ export async function GET() {
   if (error) return error;
 
   const db = createServerClient();
-  const { data, error: dbError } = await db
-    .from('spaces')
-    .select('*')
-    .eq('owner_id', userId!)
-    .order('name', { ascending: true });
+  const [{ data, error: dbError }, { data: noteSpaces }] = await Promise.all([
+    db.from('spaces').select('*').eq('owner_id', userId!).order('name', { ascending: true }),
+    // Only the foreign key is read — enough to count per space, and far
+    // cheaper than pulling note bodies just to know whether a space is empty.
+    db.from('notes').select('space_id').eq('user_id', userId!).not('space_id', 'is', null),
+  ]);
 
   if (dbError) return apiError(dbError.message);
 
-  const flat = data || [];
+  const counts = new Map<string, number>();
+  for (const row of noteSpaces || []) {
+    const id = (row as { space_id: string | null }).space_id;
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  }
+
+  const flat = (data || []).map((s) => ({ ...s, note_count: counts.get(s.id) || 0 }));
   const map = new Map(flat.map((s) => [s.id, { ...s, children: [] as typeof flat }]));
   const roots: typeof flat = [];
   for (const space of flat) {

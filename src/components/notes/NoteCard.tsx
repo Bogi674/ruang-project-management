@@ -102,7 +102,9 @@ export function NoteCard({ note, onPinToggle, onDelete }: NoteCardProps) {
         {hasChips && (
           <div className="flex items-start gap-2 min-h-[28px]">
             <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-              {note.space && <TagChip label={note.space.name} variant="green" size="sm" />}
+              {note.space && (
+                <TagChip label={note.space.name} size="sm" color={note.space.color} showDot />
+              )}
               {note.tags?.slice(0, 2).map((tag) => (
                 <TagChip key={tag} label={tag} variant="blue" size="sm" />
               ))}

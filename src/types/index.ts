@@ -29,6 +29,8 @@ export interface Space {
   is_shared: boolean;
   created_at: string;
   children?: Space[];
+  /** Notes directly inside this space; set by GET /api/spaces. */
+  note_count?: number;
 }
 
 export interface Note {
