@@ -462,37 +462,33 @@
 }
 
 /* Lined
- * A 1px hairline placed at 24–25px within each 26px cycle — in the
- * dead space between a line's descenders and the next line's ascenders.
- * background-position-y: 1px gives the same leading offset as dot grid
- * so the two surfaces look rhythmically consistent.
+ * A 1px rule anchored to each text block via border-bottom.
+ * This replaces the old repeating background-image approach which drifted
+ * because CSS pixels are fixed while element heights vary with content,
+ * margins, and density — making alignment impossible to maintain over a
+ * full page of mixed content.
+ *
+ * border-bottom attaches to the element itself, so the line always sits
+ * directly below each paragraph or list item regardless of its height.
+ * Paragraphs, headings, blockquotes, and list items are targeted
+ * individually so the containing <ul>/<ol> does not get a double line.
  */
-[data-surface="lined"] .tiptap-editor .ProseMirror {
-  background-image: linear-gradient(
-    to bottom,
-    transparent 24px,
-    rgba(0,0,0,0.11) 24px,
-    rgba(0,0,0,0.11) 25px,
-    transparent 25px
-  );
-  background-size: 100% 26px;
-  background-position: 0 1px;
-  background-attachment: local;
+[data-surface="lined"] .tiptap-editor .ProseMirror > p,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h1,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h2,
+[data-surface="lined"] .tiptap-editor .ProseMirror > h3,
+[data-surface="lined"] .tiptap-editor .ProseMirror > blockquote,
+[data-surface="lined"] .tiptap-editor .ProseMirror li {
+  border-bottom: 1px solid rgba(0,0,0,0.11);
 }
-@media (max-width: 767px) {
-  [data-surface="lined"] .tiptap-editor .ProseMirror {
-    background-size: 100% 29px;
-    background-position: 0 2px;
-  }
-}
-[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror {
-  background-image: linear-gradient(
-    to bottom,
-    transparent 24px,
-    rgba(255,255,255,0.11) 24px,
-    rgba(255,255,255,0.11) 25px,
-    transparent 25px
-  );
+
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > p,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h1,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h2,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > h3,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror > blockquote,
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror li {
+  border-bottom: 1px solid rgba(255,255,255,0.11);
 }
 
 /* ── Space color wash ──
