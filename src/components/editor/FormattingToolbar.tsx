@@ -451,10 +451,10 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
           <button
             type="button"
             onClick={onAddWidget}
-            className="flex items-center gap-1.5 px-3 h-7 text-12 text-text-secondary border border-border-default rounded-lg hover:bg-bg-subtle transition-colors duration-120 whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 h-7 text-12 text-text-secondary border border-border-default rounded-lg hover:bg-bg-elevated hover:border-accent-blue hover:text-accent-blue-dark transition-colors duration-120 whitespace-nowrap"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
-            Add
+            Add<span className="hidden md:inline">&nbsp;Widget</span>
           </button>
         </div>
       )}

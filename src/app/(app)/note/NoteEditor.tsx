@@ -3,11 +3,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Note, Widget, AutosaveState, WidgetType } from '@/types';
+import { Note, Widget, AutosaveState, WidgetType, PendingFileUpload, FileRecord } from '@/types';
 import { flattenSpaces } from '@/components/spaces/SpaceAssignMenu';
 import { TipTapEditor } from '@/components/editor/TipTapEditor';
 import { VersionHistory } from '@/components/editor/VersionHistory';
-import { WidgetPicker } from '@/components/widgets/WidgetPicker';
+import { WidgetPicker, WidgetContent } from '@/components/widgets/WidgetPicker';
 import { ReminderWidget } from '@/components/widgets/ReminderWidget';
 import { FileWidget } from '@/components/widgets/FileWidget';
 import { LinkWidget } from '@/components/widgets/LinkWidget';
@@ -39,11 +39,25 @@ function defaultTitle(createdAt?: string): string {
   return `Untitled ${days[d.getDay()]}, ${pad(d.getDate())} ${months[d.getMonth()]}, ${d.getFullYear()}`;
 }
 
+/** "2026-08-20" -> "Aug 20" for the calendar chip. */
+function formatChipDate(value: string): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const [, m, d] = value.split('-').map(Number);
+  if (!m || !d) return value;
+  return `${months[m - 1]} ${d}`;
+}
+
+const WIDGET_TYPES: WidgetType[] = ['reminder', 'file', 'link'];
+
 export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEditorProps) {
   const router = useRouter();
   const hasCalledFirstEdit = useRef(false);
   const [autosave, setAutosave] = useState<AutosaveState>({ status: 'idle', lastSaved: null });
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
+  // Set when the FAB deep-links straight into one widget type (?widget=link).
+  const [presetWidgetType, setPresetWidgetType] = useState<WidgetType | null>(null);
+  const [highlightedWidgetId, setHighlightedWidgetId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -61,8 +75,25 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
   const { spaces } = useSpaces();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialNote?.space_id || null);
   const [showSpacePicker, setShowSpacePicker] = useState(false);
+  const [pinnedDate, setPinnedDate] = useState<string>(initialNote?.pinned_date ?? '');
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const createdAt = initialNote?.created_at || new Date().toISOString();
+
+  // The FAB creates the note first and then deep-links here with the widget
+  // type it was asked for, so the config form opens on arrival.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('widget');
+    if (requested && (WIDGET_TYPES as string[]).includes(requested)) {
+      setPresetWidgetType(requested as WidgetType);
+      setShowWidgetPicker(true);
+      // Drop the param so a refresh does not reopen the modal.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+  }, []);
 
   useEffect(() => {
     if (titleRef.current) {
@@ -131,26 +162,55 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     });
   }
 
-  async function handleAddWidget(type: WidgetType) {
-    const defaultContent =
-      type === 'reminder'
-        ? { title: '', date: null, time: null, recurrence: 'once', type_label: 'Deadline' }
-        : type === 'file'
-        ? { description: '' }
-        : { url: '', og_title: '', og_description: '', og_image: null, note: '' };
-
+  /**
+   * Called only once the config form is submitted — the widget row is created
+   * with real content instead of an empty placeholder. A file widget also has
+   * its already-uploaded R2 object linked here, because `files.widget_id` does
+   * not exist until this insert returns.
+   */
+  async function handleCreateWidget(
+    type: WidgetType,
+    content: WidgetContent,
+    pendingFile: PendingFileUpload | null
+  ) {
     const res = await fetch('/api/widgets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note_id: noteId, type, content: defaultContent }),
+      body: JSON.stringify({ note_id: noteId, type, content }),
     });
-    const widget = await res.json();
-    if (widget.id) setWidgets((prev) => [...prev, widget]);
+    if (!res.ok) return;
+    const widget = (await res.json()) as Widget;
+    if (!widget?.id) return;
+
+    if (type === 'file' && pendingFile) {
+      const fileRes = await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ widget_id: widget.id, ...pendingFile }),
+      });
+      if (fileRes.ok) widget.file = (await fileRes.json()) as FileRecord;
+    }
+
+    setWidgets((prev) => [...prev, widget]);
+    setHighlightedWidgetId(widget.id);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedWidgetId(null), 2000);
   }
 
   async function handleRemoveWidget(widgetId: string) {
     await fetch(`/api/widgets/${widgetId}`, { method: 'DELETE' });
     setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
+  }
+
+  /** Assigning a date is what puts the note on the Calendar. */
+  async function handlePinnedDateChange(value: string) {
+    setPinnedDate(value);
+    await fetch(`/api/notes/${noteId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned_date: value || null }),
+    });
+    emitNotesChanged();
   }
 
   async function handleToggleLock() {
@@ -383,8 +443,8 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
           placeholder="Untitled"
           disabled={isLocked}
           rows={1}
-          className="w-full resize-none overflow-hidden font-sans font-semibold text-[26px] md:text-[32px] bg-transparent border-none outline-none placeholder:text-text-faint placeholder:font-normal leading-tight disabled:cursor-not-allowed"
-          style={{ letterSpacing: '-0.025em', lineHeight: 1.2, color: 'var(--heading-color)' }}
+          className="w-full resize-none overflow-hidden font-serif font-normal text-[26px] md:text-[32px] bg-transparent border-none outline-none placeholder:text-text-faint leading-tight disabled:cursor-not-allowed"
+          style={{ letterSpacing: '-0.025em', lineHeight: 1.2, color: 'var(--text-primary)' }}
         />
 
         {/* Metadata row */}
@@ -457,6 +517,45 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
               </div>
             )}
           </div>
+
+          {/* Date chip — assigning a date puts the note on the Calendar.
+              The native date input sits invisibly on top of the chip so every
+              browser opens its own picker without a bespoke popover. */}
+          <div className="relative flex-shrink-0">
+            <span
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-120 border ${
+                pinnedDate
+                  ? 'bg-accent-blue-bg text-accent-blue-dark border-accent-blue'
+                  : 'bg-bg-surface text-text-muted border-border-light hover:border-border-medium'
+              } ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              {pinnedDate ? formatChipDate(pinnedDate) : 'Set date'}
+              {pinnedDate && !isLocked && (
+                <button
+                  type="button"
+                  aria-label="Clear date"
+                  onClick={() => handlePinnedDateChange('')}
+                  className="relative z-10 ml-0.5 text-accent-blue-dark hover:text-danger"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+            <input
+              type="date"
+              aria-label="Assign a date"
+              value={pinnedDate}
+              disabled={isLocked}
+              onChange={(e) => handlePinnedDateChange(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+          </div>
         </div>
       </div>
 
@@ -478,12 +577,13 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
           <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-3">Attached</p>
           <div className="space-y-2">
             {widgets.map((w) => {
+              const highlight = w.id === highlightedWidgetId;
               if (w.type === 'reminder')
-                return <ReminderWidget key={w.id} content={w.content as never} onRemove={() => handleRemoveWidget(w.id)} />;
+                return <ReminderWidget key={w.id} content={w.content as never} highlight={highlight} onRemove={() => handleRemoveWidget(w.id)} />;
               if (w.type === 'file')
-                return <FileWidget key={w.id} file={w.file} onRemove={() => handleRemoveWidget(w.id)} />;
+                return <FileWidget key={w.id} file={w.file} content={w.content as never} highlight={highlight} onRemove={() => handleRemoveWidget(w.id)} />;
               if (w.type === 'link')
-                return <LinkWidget key={w.id} content={w.content as never} onRemove={() => handleRemoveWidget(w.id)} />;
+                return <LinkWidget key={w.id} content={w.content as never} highlight={highlight} onRemove={() => handleRemoveWidget(w.id)} />;
               return null;
             })}
           </div>
@@ -491,7 +591,14 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
       )}
 
       {showWidgetPicker && (
-        <WidgetPicker onSelect={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
+        <WidgetPicker
+          initialType={presetWidgetType}
+          onSubmit={handleCreateWidget}
+          onClose={() => {
+            setShowWidgetPicker(false);
+            setPresetWidgetType(null);
+          }}
+        />
       )}
 
       {showVersionHistory && (

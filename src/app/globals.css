@@ -146,10 +146,28 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+/* Ring pulse used to point at the "Add Widget" toolbar button. */
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(161,181,216,.5); }
+  70%  { box-shadow: 0 0 0 7px rgba(161,181,216,0); }
+  100% { box-shadow: 0 0 0 0 rgba(161,181,216,0); }
+}
 
 .animate-fadeUp    { animation: fadeUp 0.2s ease both; }
 .animate-slideLeft { animation: slideLeft 0.22s ease both; }
 .animate-fadeIn    { animation: fadeIn 0.15s ease both; }
+.animate-modalIn   { animation: modalIn 0.2s ease both; }
+.animate-pulseRing { animation: pulseRing 1.8s ease infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modalIn,
+  .animate-pulseRing,
+  .animate-fadeUp { animation: none; }
+}
 
 /* ── Cursor blink (empty note) ── */
 .cursor-blink {

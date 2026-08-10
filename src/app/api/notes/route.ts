@@ -43,21 +43,7 @@ export async function POST(req: NextRequest) {
 
   if (dbError || !note) return apiError(dbError?.message ?? 'Failed to create note');
 
-  // Optionally create an initial widget in the same request so the FAB
-  // only ever makes one round trip regardless of content type.
-  if (body.widget) {
-    const widgetType = body.widget as string;
-    const defaultContent =
-      widgetType === 'reminder'
-        ? { title: '', date: null, time: null, recurrence: 'once', type_label: 'Deadline' }
-        : widgetType === 'file'
-        ? { description: '' }
-        : { url: '', og_title: '', og_description: '', og_image: null, note: '' };
-
-    await db
-      .from('widgets')
-      .insert({ user_id: userId!, note_id: note.id, type: widgetType, content: defaultContent });
-  }
-
+  // Widgets are never pre-created here. The editor's config form owns widget
+  // creation so a row only exists once it has real content.
   return NextResponse.json(note, { status: 201 });
 }
