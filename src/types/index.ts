@@ -59,15 +59,35 @@ export interface NoteVersion {
   created_at: string;
 }
 
+/** How far ahead of `date`/`time` a reminder email goes out. */
+export type ReminderLead = '15m' | '30m' | '1h' | '3h' | '1d' | '3d' | '1w';
+
+export const REMINDER_LEAD_OPTIONS: { value: ReminderLead; label: string }[] = [
+  { value: '15m', label: '15 min before' },
+  { value: '30m', label: '30 min before' },
+  { value: '1h', label: '1 hour before' },
+  { value: '3h', label: '3 hours before' },
+  { value: '1d', label: '1 day before' },
+  { value: '3d', label: '3 days before' },
+  { value: '1w', label: '1 week before' },
+];
+
 export interface ReminderContent {
   title: string;
+  description?: string;
   date: string | null;
   time: string | null;
   recurrence: RecurrenceType;
   type_label: ReminderLabel;
+  /** Email delivery — stored now, delivered by the Phase 2 Resend worker. */
+  recipients?: string[];
+  send_times?: number;
+  send_early?: ReminderLead;
 }
 
 export interface FileContent {
+  /** User-facing label; falls back to the uploaded filename when empty. */
+  display_name?: string;
   description: string;
 }
 
@@ -76,7 +96,27 @@ export interface LinkContent {
   og_title: string;
   og_description: string;
   og_image: string | null;
+  domain?: string;
   note: string;
+}
+
+/**
+ * A file already uploaded to R2 but not yet linked to a widget row — the
+ * widget does not exist until the form is submitted, so the metadata is
+ * carried in memory and written to `files` right after the widget insert.
+ */
+export interface PendingFileUpload {
+  filename: string;
+  r2_object_key: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+export interface LinkPreview {
+  domain: string;
+  og_title: string;
+  og_description: string;
+  og_image: string | null;
 }
 
 export interface Widget {

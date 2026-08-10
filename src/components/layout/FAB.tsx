@@ -104,18 +104,17 @@ export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
     setCreating(true);
 
     try {
-      const body: Record<string, string> = { type: item.noteType };
-      if (item.widget) body.widget = item.widget;
-
       const res = await fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ type: item.noteType }),
       });
 
       if (!res.ok) throw new Error('Creation failed');
       const data = await res.json();
-      if (data.id) router.push(`/note/${data.id}`);
+      // The widget itself is created by its config form in the editor, so a
+      // cancelled form leaves no empty widget row behind.
+      if (data.id) router.push(item.widget ? `/note/${data.id}?widget=${item.widget}` : `/note/${data.id}`);
     } catch {
       // silent fail - FAB resets so user can retry
     } finally {

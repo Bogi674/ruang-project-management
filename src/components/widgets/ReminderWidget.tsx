@@ -1,33 +1,49 @@
 'use client';
 
-import { ReminderContent } from '@/types';
+import { ReminderContent, REMINDER_LEAD_OPTIONS } from '@/types';
+import { WidgetRow } from './WidgetRow';
 
 interface ReminderWidgetProps {
   content: ReminderContent;
+  highlight?: boolean;
   onRemove?: () => void;
 }
 
-export function ReminderWidget({ content, onRemove }: ReminderWidgetProps) {
-  const datetime = content.date
-    ? `${content.date}${content.time ? ` at ${content.time}` : ''}`
-    : 'No date set';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** "2026-08-20" -> "Aug 20, 2026" without dragging a date lib into the row. */
+function formatDate(value: string): string {
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return value;
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+export function buildReminderSubtitle(content: ReminderContent): string {
+  const parts: string[] = [];
+  parts.push(
+    content.date
+      ? `${formatDate(content.date)}${content.time ? ` at ${content.time}` : ''}`
+      : 'No date set'
+  );
+  if (content.type_label) parts.push(content.type_label);
+
+  // Delivery detail only reads as useful once there is somebody to send to.
+  const times = content.send_times ?? 0;
+  if (times > 0 && content.recipients?.length) {
+    const lead = REMINDER_LEAD_OPTIONS.find((o) => o.value === content.send_early)?.label;
+    parts.push(lead ? `${times}× (${lead})` : `${times}×`);
+  }
+  return parts.join(' · ');
+}
+
+export function ReminderWidget({ content, highlight, onRemove }: ReminderWidgetProps) {
   return (
-    <div className="flex items-center gap-3 p-3.5 bg-bg-surface border border-border-default rounded-widget">
-      <div className="w-9 h-9 rounded-lg bg-bg-elevated flex items-center justify-center flex-shrink-0">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#738290" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-13 font-medium text-text-primary truncate">{content.title || 'Reminder'}</p>
-        <p className="text-11 text-text-muted mt-0.5">{datetime} · {content.type_label}</p>
-      </div>
-      {onRemove && (
-        <button onClick={onRemove} className="text-11 text-text-muted border border-border-default rounded-full px-2.5 py-1 hover:text-danger hover:border-danger-border transition-colors duration-120">
-          Remove
-        </button>
-      )}
-    </div>
+    <WidgetRow
+      type="reminder"
+      title={content.title || 'Reminder'}
+      subtitle={buildReminderSubtitle(content)}
+      highlight={highlight}
+      onRemove={onRemove}
+    />
   );
 }

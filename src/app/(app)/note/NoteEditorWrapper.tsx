@@ -12,7 +12,9 @@ export async function NoteEditorWrapper({ noteId }: { noteId: string }) {
   const db = createServerClient();
   const { data: note } = await db
     .from('notes')
-    .select('*, space:spaces(*), widgets(*)')
+    // File widgets need their `files` row up front, otherwise the attached
+    // row renders as "No file uploaded" until the page is recreated.
+    .select('*, space:spaces(*), widgets(*, file:files(*))')
     .eq('id', noteId)
     .eq('user_id', userId)
     .single();
