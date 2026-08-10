@@ -415,18 +415,13 @@
 
 /* ── Note Surfaces ──
  * Applied by setting data-surface on <html> via applyPreferences().
- * Targets .note-paper (the outer note editor wrapper) and .tiptap-editor.
- * "clean" is the default — no rules needed, just the baseline white.
+ * Patterns target .tiptap-editor .ProseMirror directly so they appear
+ * only inside the actual writing area, not across the full page.
+ * "clean" is the default — no rules needed.
  */
 
-/* Dot grid: a subtle 22px dot pattern using the border color as dots. */
-[data-surface="dotgrid"] .note-paper {
-  background-image: radial-gradient(circle, var(--border-medium) 1px, transparent 1px);
-  background-size: 22px 22px;
-  background-attachment: local;
-}
-
-/* Warm paper: a very slightly warm cream tone. */
+/* Warm paper: applied to the outer .note-paper so the cream tone covers
+   the full writing column, not just the ProseMirror scroll box. */
 [data-surface="warm"] .note-paper {
   background-color: #faf7f0;
 }
@@ -434,23 +429,68 @@
   background-color: #1d1a13;
 }
 
-/* Lined: faint horizontal rules every 26px — approximately one line-height. */
-[data-surface="lined"] .note-paper {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent,
-    transparent 25px,
-    var(--border-light) 25px,
-    var(--border-light) 26px
-  );
+/* Dot grid
+ * background-size matches the editor line-height exactly:
+ *   desktop  14.5px × 1.78 ≈ 26px
+ *   mobile   16px   × 1.78 ≈ 28.5px → 29px
+ *
+ * background-position-y: 1px shifts the first dot row into the
+ * half-leading gap below line 1's descenders so no dot lands on
+ * a text glyph. background-attachment: local keeps the grid locked
+ * to the content as the user scrolls — alignment never drifts.
+ *
+ * Dot: 0.8px radius, rgba at 9 % — visible but not competing with text.
+ */
+[data-surface="dotgrid"] .tiptap-editor .ProseMirror {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.09) 0.8px, transparent 0.8px);
+  background-size: 26px 26px;
+  background-position: 13px 1px;
   background-attachment: local;
 }
+@media (max-width: 767px) {
+  [data-surface="dotgrid"] .tiptap-editor .ProseMirror {
+    background-size: 29px 29px;
+    background-position: 14px 2px;
+  }
+}
 
-/* Make the TipTap editor itself transparent so the note-paper background shows through. */
-[data-surface="dotgrid"] .tiptap-editor,
-[data-surface="warm"]    .tiptap-editor,
-[data-surface="lined"]   .tiptap-editor {
-  background: transparent;
+/* Dark theme dots — slightly lighter so they show on dark bg without glare. */
+[data-theme="dark"][data-surface="dotgrid"] .tiptap-editor .ProseMirror {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.1) 0.8px, transparent 0.8px);
+}
+
+/* Lined
+ * A 1px hairline placed at 24–25px within each 26px cycle — in the
+ * dead space between a line's descenders and the next line's ascenders.
+ * background-position-y: 1px gives the same leading offset as dot grid
+ * so the two surfaces look rhythmically consistent.
+ */
+[data-surface="lined"] .tiptap-editor .ProseMirror {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 24px,
+    rgba(0,0,0,0.07) 24px,
+    rgba(0,0,0,0.07) 25px,
+    transparent 25px
+  );
+  background-size: 100% 26px;
+  background-position: 0 1px;
+  background-attachment: local;
+}
+@media (max-width: 767px) {
+  [data-surface="lined"] .tiptap-editor .ProseMirror {
+    background-size: 100% 29px;
+    background-position: 0 2px;
+  }
+}
+[data-theme="dark"][data-surface="lined"] .tiptap-editor .ProseMirror {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 24px,
+    rgba(255,255,255,0.08) 24px,
+    rgba(255,255,255,0.08) 25px,
+    transparent 25px
+  );
 }
 
 /* ── Space color wash ──
