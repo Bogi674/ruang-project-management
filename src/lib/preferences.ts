@@ -74,6 +74,15 @@ export function applyPreferences(prefs: Partial<UserPreferences>) {
   } else {
     root.style.setProperty('--font-body', "system-ui, -apple-system, 'Segoe UI', sans-serif");
   }
+
+  // Note surface — drives [data-surface="..."] CSS rules in globals.css.
+  // 'clean' removes the attribute so the default (no rules applied) kicks in.
+  const surface = prefs.surface_preference || 'clean';
+  if (surface === 'clean') {
+    root.removeAttribute('data-surface');
+  } else {
+    root.setAttribute('data-surface', surface);
+  }
 }
 
 interface PreferencesContextType {

@@ -50,6 +50,10 @@
     --accent-amber-dark: #A9761A;
     --accent-amber-bg: #FDF3DC;
 
+    /* Space color — injected per-space via inline style on the space page root.
+       Falls back to accent-blue so any rule using it is safe on non-space pages. */
+    --space-color: var(--accent-blue);
+
     /*
      * Mobile chrome metrics. The tab bar and the FAB both derive from these,
      * so the FAB can never land on top of the bar the way it did when each
@@ -407,4 +411,60 @@
 
   /* Full-screen note editor: no horizontal drift while typing. */
   .tiptap-editor .ProseMirror table { display: block; overflow-x: auto; }
+}
+
+/* ── Note Surfaces ──
+ * Applied by setting data-surface on <html> via applyPreferences().
+ * Targets .note-paper (the outer note editor wrapper) and .tiptap-editor.
+ * "clean" is the default — no rules needed, just the baseline white.
+ */
+
+/* Dot grid: a subtle 22px dot pattern using the border color as dots. */
+[data-surface="dotgrid"] .note-paper {
+  background-image: radial-gradient(circle, var(--border-medium) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-attachment: local;
+}
+
+/* Warm paper: a very slightly warm cream tone. */
+[data-surface="warm"] .note-paper {
+  background-color: #faf7f0;
+}
+[data-theme="dark"][data-surface="warm"] .note-paper {
+  background-color: #1d1a13;
+}
+
+/* Lined: faint horizontal rules every 26px — approximately one line-height. */
+[data-surface="lined"] .note-paper {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 25px,
+    var(--border-light) 25px,
+    var(--border-light) 26px
+  );
+  background-attachment: local;
+}
+
+/* Make the TipTap editor itself transparent so the note-paper background shows through. */
+[data-surface="dotgrid"] .tiptap-editor,
+[data-surface="warm"]    .tiptap-editor,
+[data-surface="lined"]   .tiptap-editor {
+  background: transparent;
+}
+
+/* ── Space color wash ──
+ * A full-bleed gradient header behind each space page's content.
+ * Rendered as a sibling to the content div, not a pseudo-element,
+ * so it can be absolute-positioned without touching any Tailwind class.
+ */
+.space-color-wash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 220px;
+  pointer-events: none;
+  z-index: 0;
+  /* The actual gradient color is injected inline via style prop. */
 }

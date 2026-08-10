@@ -38,6 +38,38 @@ const LANDING_OPTIONS = [
   { value: 'storeroom', label: 'Storeroom' },
 ];
 
+const SURFACE_OPTIONS = [
+  {
+    value: 'clean',
+    label: 'Clean',
+    sub: 'Plain white',
+    preview: null,
+  },
+  {
+    value: 'dotgrid',
+    label: 'Dot Grid',
+    sub: 'Graph paper',
+    preview: {
+      backgroundImage: 'radial-gradient(circle, #c8d4e0 1px, transparent 1px)',
+      backgroundSize: '10px 10px',
+    },
+  },
+  {
+    value: 'warm',
+    label: 'Warm Paper',
+    sub: 'Cream tone',
+    preview: { backgroundColor: '#faf7f0' },
+  },
+  {
+    value: 'lined',
+    label: 'Lined',
+    sub: 'Notebook feel',
+    preview: {
+      backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 11px, #dde4ec 11px, #dde4ec 12px)',
+    },
+  },
+];
+
 type SettingsTab = 'profile' | 'appearance';
 
 export function SettingsClient({ name, email, image, isGoogleUser }: SettingsClientProps) {
@@ -451,6 +483,42 @@ function AppearanceTab({
                 }}
               >
                 {label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Note surface */}
+      <section>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-4">Note Surface</p>
+        <div className="grid grid-cols-2 gap-2">
+          {SURFACE_OPTIONS.map(({ value, label, sub, preview }) => {
+            const active = (preferences.surface_preference || 'clean') === value;
+            return (
+              <button
+                key={value}
+                onClick={() => updatePreferences({ surface_preference: value })}
+                className="p-3 rounded-[10px] border text-left transition-colors duration-120 overflow-hidden"
+                style={{
+                  background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                  borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                }}
+              >
+                <div
+                  className="w-full h-9 rounded-[6px] mb-2.5 border border-border-light"
+                  style={{ backgroundColor: 'var(--bg-base)', ...(preview || {}) }}
+                />
+                <p
+                  className="text-[13px] mb-0.5"
+                  style={{
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-primary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </p>
+                <p className="text-[11px] text-text-muted">{sub}</p>
               </button>
             );
           })}

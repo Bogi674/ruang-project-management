@@ -18,6 +18,19 @@ import {
 
 const PINNED_KEY = 'ruang_pinned_spaces';
 
+/**
+ * Converts a hex color to rgba() with the given alpha.
+ * Used to tint the active space row with its own colour instead of always
+ * defaulting to the global accent blue.
+ */
+function spaceRgba(hex: string, alpha: number): string {
+  const clean = (hex || '#738290').replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 115;
+  const g = parseInt(clean.slice(2, 4), 16) || 130;
+  const b = parseInt(clean.slice(4, 6), 16) || 144;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function getPinnedIds(): string[] {
   try { return JSON.parse(localStorage.getItem(PINNED_KEY) || '[]'); } catch { return []; }
 }
@@ -73,15 +86,19 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
   return (
     <li>
       {/* The highlight lives on the whole row (chevron + label + actions) rather
-          than just the link, so an active space reads as a full-width band. */}
+          than just the link, so an active space reads as a full-width band.
+          Active rows use the space's own colour as a faint tint instead of
+          the global accent-blue, so each room feels visually distinct. */}
       <div
-        className={`flex items-center gap-1 pr-1 rounded-lg group transition-colors duration-120 ${
-          dropActive
-            ? 'ring-1 ring-accent-blue bg-accent-blue-bg'
+        className="flex items-center gap-1 pr-1 rounded-lg group transition-colors duration-120"
+        style={{
+          background: dropActive
+            ? 'var(--accent-blue-bg)'
             : isActive
-            ? 'bg-accent-blue-bg'
-            : 'hover:bg-border-light'
-        }`}
+            ? spaceRgba(space.color, 0.13)
+            : undefined,
+          outline: dropActive ? '1px solid var(--accent-blue)' : undefined,
+        }}
         onDragOver={handleDragOver}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropActive(false);
@@ -103,10 +120,11 @@ function SpaceItem({ space, level = 0, pinnedIds, onNewChild, onOpenMenu, onDrop
         )}
         <Link
           href={`/space/${space.id}`}
-          className={`flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
-            isActive ? 'text-accent-blue-dark' : 'text-text-secondary group-hover:text-text-primary'
-          }`}
-          style={{ fontWeight: isActive ? 580 : 400 }}
+          className="flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 rounded-lg text-[13px] no-underline transition-colors duration-120"
+          style={{
+            color: isActive ? space.color || 'var(--accent-blue-dark)' : undefined,
+            fontWeight: isActive ? 580 : 400,
+          }}
         >
           <span className="rounded-full flex-shrink-0" style={{ width: dotSize, height: dotSize, background: space.color || '#738290' }} />
           <span className="truncate">{space.icon && `${space.icon} `}{space.name}</span>
