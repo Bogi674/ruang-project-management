@@ -71,15 +71,39 @@ function formatHour(h: number) {
   return `${h - 12} PM`;
 }
 
+/*
+ * Calendar item colours come from tokens, not literals, so a note chip stays a
+ * note chip in dark mode instead of an amber pastel on a near-black cell.
+ * `--chip-note-*` / `--chip-task-*` are declared per theme in globals.css;
+ * widgets borrow the user's accent.
+ */
 function getNoteChipStyle(type: string) {
-  if (type === 'checklist') return { bg: '#E4F0D0', text: '#4a6a40', dot: '#82b472' };
-  return { bg: '#fef3c7', text: '#92400e', dot: '#f59e0b' };
+  if (type === 'checklist')
+    return { bg: 'var(--chip-task-bg)', text: 'var(--chip-task-ink)', dot: 'var(--chip-task-dot)' };
+  return { bg: 'var(--chip-note-bg)', text: 'var(--chip-note-ink)', dot: 'var(--chip-note-dot)' };
 }
 
 function getPaneItemStyle(kind: string) {
-  if (kind === 'note') return { bg: '#fef9ee', dot: '#f59e0b', text: '#92400e', border: '#fde68a' };
-  if (kind === 'checklist') return { bg: '#f0f7eb', dot: '#82b472', text: '#4a6a40', border: '#C2D8B9' };
-  return { bg: '#eef4fb', dot: '#A1B5D8', text: '#4a6090', border: '#c8d9ee' };
+  if (kind === 'note')
+    return {
+      bg: 'var(--chip-note-bg)',
+      dot: 'var(--chip-note-dot)',
+      text: 'var(--chip-note-ink)',
+      border: 'var(--chip-note-border)',
+    };
+  if (kind === 'checklist')
+    return {
+      bg: 'var(--chip-task-bg)',
+      dot: 'var(--chip-task-dot)',
+      text: 'var(--chip-task-ink)',
+      border: 'var(--chip-task-border)',
+    };
+  return {
+    bg: 'var(--accent-blue-bg)',
+    dot: 'var(--accent-blue)',
+    text: 'var(--accent-blue-dark)',
+    border: 'var(--accent-blue)',
+  };
 }
 
 function getWidgetTitle(w: Widget): string {
@@ -325,14 +349,14 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     return (
       <div
         className={`flex flex-col p-1.5 border-b border-r border-border-light transition-colors duration-80 min-h-[90px] ${
-          !inMonth ? 'bg-[#f8f9fc]' : 'bg-bg-base'
+          !inMonth ? 'bg-bg-subtle' : 'bg-bg-base'
         } ${isDragTarget ? '!bg-accent-blue-bg' : inMonth ? 'hover:bg-bg-surface' : ''}`}
         onDragOver={inMonth ? (e) => handleDragOver(e, dateStr) : undefined}
         onDragLeave={handleDragLeave}
         onDrop={inMonth ? (e) => handleDrop(e, dateStr) : undefined}
       >
         <span className={`self-start text-[11px] font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 ${
-          isToday ? 'bg-accent-blue text-white' : !inMonth ? 'text-text-faint' : 'text-text-secondary'
+          isToday ? 'bg-accent-blue text-accent-ink' : !inMonth ? 'text-text-faint' : 'text-text-secondary'
         }`}>
           {date.getDate()}
         </span>
@@ -364,7 +388,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
               <div
                 key={i}
                 className={`flex-1 border-l border-border-light p-1 transition-colors ${
-                  isToday ? 'bg-[#f4f8ff]' : ''
+                  isToday ? 'bg-accent-blue-bg' : ''
                 } ${isDragTarget ? '!bg-accent-blue-bg' : 'hover:bg-bg-surface'}`}
                 onDragOver={(e) => handleDragOver(e, dateStr)}
                 onDragLeave={handleDragLeave}
@@ -531,7 +555,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                 key={v}
                 onClick={() => changeView(v)}
                 className={`px-3 py-1.5 text-[12px] transition-colors duration-120 ${
-                  view === v ? 'bg-accent-blue text-white font-medium' : 'text-text-secondary hover:bg-bg-surface'
+                  view === v ? 'bg-accent-blue text-accent-ink font-medium' : 'text-text-secondary hover:bg-bg-surface'
                 }`}
               >
                 {v === 'workweek' ? 'Work week' : v.charAt(0).toUpperCase() + v.slice(1)}
@@ -571,7 +595,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                         {DAY_NAMES[d.getDay()]}
                       </div>
                       <div className={`text-[18px] font-light mt-0.5 w-8 h-8 mx-auto flex items-center justify-center rounded-full ${
-                        isToday ? 'bg-accent-blue text-white' : 'text-text-secondary'
+                        isToday ? 'bg-accent-blue text-accent-ink' : 'text-text-secondary'
                       }`}>
                         {d.getDate()}
                       </div>
@@ -646,7 +670,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                     onClick={() => setFilter(f)}
                     className={`text-[10.5px] px-2.5 py-0.5 rounded-full border transition-colors ${
                       filter === f
-                        ? 'bg-accent-blue text-white border-accent-blue'
+                        ? 'bg-accent-blue text-accent-ink border-accent-blue'
                         : 'border-border-default text-text-muted hover:border-accent-blue hover:text-accent-blue-dark bg-bg-surface'
                     }`}
                   >
@@ -712,7 +736,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
           Items are scheduled with a date input, since touch has no DnD. */}
       {sheetOpen && (
         <div className="md:hidden fixed inset-0 z-[60] flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={() => setSheetOpen(false)} />
+          <div className="absolute inset-0 animate-fadeIn" style={{ background: 'var(--scrim)' }} onClick={() => setSheetOpen(false)} />
           <div
             className="relative bg-bg-base rounded-t-[18px] shadow-modal flex flex-col animate-fadeUp"
             style={{ maxHeight: '72vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
@@ -758,7 +782,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                     onClick={() => setFilter(f)}
                     className={`text-[12px] px-3 py-1.5 rounded-full border flex-shrink-0 transition-colors ${
                       filter === f
-                        ? 'bg-accent-blue text-white border-accent-blue'
+                        ? 'bg-accent-blue text-accent-ink border-accent-blue'
                         : 'border-border-default text-text-muted bg-bg-surface'
                     }`}
                   >

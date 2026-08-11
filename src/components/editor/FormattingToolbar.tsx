@@ -30,8 +30,27 @@ function ToolbarButton({ onClick, active, disabled, title, children }: ToolbarBu
   );
 }
 
+/**
+ * A run of related controls.
+ *
+ * Groups are the unit of wrapping: on desktop the strip wraps, and because
+ * each group is its own flex item, a row break can only ever fall *between*
+ * groups — undo/redo never gets split from itself, and no lone divider is left
+ * stranded at the end of a line.
+ *
+ * The hairline separator is mobile-only. On desktop the extra inter-group
+ * margin does the same job without leaving a dangling rule at a wrap point.
+ */
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-0.5 flex-shrink-0 md:mr-2 last:md:mr-0">
+      {children}
+    </div>
+  );
+}
+
 function ToolbarDivider() {
-  return <div className="w-px h-4 bg-border-default flex-shrink-0 mx-0.5" />;
+  return <div className="w-px h-4 bg-border-default flex-shrink-0 mx-0.5 md:hidden" />;
 }
 
 interface MenuCoords {
@@ -195,7 +214,7 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={`w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-bg-surface transition-colors flex items-center gap-2 ${
-        active ? 'text-accent-blue-dark font-medium bg-accent-blue-bg/40' : 'text-text-secondary'
+        active ? 'text-accent-blue-dark font-medium bg-accent-blue-bg' : 'text-text-secondary'
       }`}
     >
       {children}
@@ -264,18 +283,32 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
       className={`${position === 'top' ? 'border-b' : 'border-t'} border-border-default bg-bg-base flex items-stretch flex-shrink-0`}
     >
       <div className="flex-1 min-w-0">
-        {/* Plain scrolling strip — no edge fades or chevron hints. */}
-        <div className="h-[46px] flex items-center px-3 gap-0.5 overflow-x-auto toolbar-scroll">
+        {/*
+          Desktop wraps, mobile scrolls.
+
+          The editor column is capped at 820px with 80px gutters, so the full
+          control set can never fit one desktop row — it used to sit behind a
+          horizontal scroll, which hid Table, Divider and the sub/superscripts
+          from anyone who did not think to drag the strip. `md:flex-wrap` lets
+          the groups flow onto a second row instead, and the height goes auto
+          so the toolbar grows rather than clipping. Phones keep the single
+          swipeable strip: a wrapping toolbar there would eat the writing area.
+        */}
+        <div className="h-[46px] md:h-auto md:min-h-[46px] flex md:flex-wrap items-center px-3 md:py-1.5 gap-0.5 md:gap-y-1 overflow-x-auto md:overflow-x-visible toolbar-scroll">
+        <ToolbarGroup>
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo" disabled={!state.canUndo}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Redo" disabled={!state.canRedo}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
         </ToolbarButton>
+        </ToolbarGroup>
 
         <ToolbarDivider />
 
-        {/* Block type */}
+        {/* Block type + font size stay together: both answer "what is this
+            text?", and splitting them across rows reads as unrelated. */}
+        <ToolbarGroup>
         <Dropdown label={blockLabel} width={150} minTriggerWidth={96}>
           {(close) => (
             <>
@@ -339,10 +372,12 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
             </>
           )}
         </Dropdown>
+        </ToolbarGroup>
 
         <ToolbarDivider />
 
         {/* Lists */}
+        <ToolbarGroup>
         <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={state.isBulletList} title="Bullet list">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
         </ToolbarButton>
@@ -353,9 +388,12 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </ToolbarButton>
 
+        </ToolbarGroup>
+
         <ToolbarDivider />
 
         {/* Indentation */}
+        <ToolbarGroup>
         <ToolbarButton onClick={() => editor.chain().focus().outdent().run()} title="Decrease indent (Shift+Tab)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="6" x2="11" y2="6"/><line x1="21" y1="12" x2="11" y2="12"/><line x1="21" y1="18" x2="11" y2="18"/><polyline points="7 8 3 12 7 16"/></svg>
         </ToolbarButton>
@@ -363,9 +401,12 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="6" x2="11" y2="6"/><line x1="21" y1="12" x2="11" y2="12"/><line x1="21" y1="18" x2="11" y2="18"/><polyline points="3 8 7 12 3 16"/></svg>
         </ToolbarButton>
 
+        </ToolbarGroup>
+
         <ToolbarDivider />
 
         {/* Inline marks */}
+        <ToolbarGroup>
         <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={state.isBold} title="Bold">
           <strong style={{ fontFamily: 'serif' }}>B</strong>
         </ToolbarButton>
@@ -388,9 +429,12 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
           x₂
         </ToolbarButton>
 
+        </ToolbarGroup>
+
         <ToolbarDivider />
 
-        {/* Table */}
+        {/* Insert */}
+        <ToolbarGroup>
         <Dropdown label="Table" width={168} minTriggerWidth={72}>
           {(close) => (
             <>
@@ -442,7 +486,8 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
         <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>
         </ToolbarButton>
-      </div>
+        </ToolbarGroup>
+        </div>
       </div>
 
       {/* Pinned Add button — never scrolls out of reach */}

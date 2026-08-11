@@ -620,7 +620,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
 
       {/* Widgets zone */}
       {widgets.length > 0 && (
-        <div className="px-4 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-[#edf3fa] pt-4 pb-2 flex-shrink-0">
+        <div className="px-4 md:px-20 max-w-[820px] md:mx-auto w-full border-t border-border-light pt-4 pb-2 flex-shrink-0">
           <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-3">Attached</p>
           <div className="space-y-2">
             {widgets.map((w) => {

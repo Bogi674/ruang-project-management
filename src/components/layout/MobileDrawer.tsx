@@ -181,7 +181,7 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/30 animate-fadeIn" onClick={onClose} />
+      <div className="fixed inset-0 z-50 animate-fadeIn" style={{ background: 'var(--scrim)' }} onClick={onClose} />
       {/* Wider than the old fixed 280px so the space rows and their manage
           actions stop stacking into a tall, narrow column. */}
       <div
@@ -219,7 +219,7 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
                 onClick={() => setManageMode((v) => !v)}
                 className={`text-[10.5px] px-2 py-1 rounded-full border transition-colors ${
                   manageMode
-                    ? 'bg-accent-blue text-white border-accent-blue'
+                    ? 'bg-accent-blue text-accent-ink border-accent-blue'
                     : 'border-border-default text-text-muted'
                 }`}
               >
@@ -295,7 +295,7 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteConfirm(null)} />
+          <div className="absolute inset-0" style={{ background: 'var(--scrim)' }} onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-bg-base rounded-[14px] p-5 w-full max-w-[340px] shadow-modal">
             <h3 className="font-serif text-[17px] text-text-primary mb-2" style={{ letterSpacing: '-0.01em' }}>
               Delete &ldquo;{deleteConfirm.name}&rdquo;?

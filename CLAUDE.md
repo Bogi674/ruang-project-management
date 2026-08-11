@@ -59,6 +59,7 @@ users
   id, email, name, avatar_url,
   accent_color, typography_preference, surface_preference,
   density_preference, landing_page_preference, theme_preference,
+  app_background_preference, background_tint_preference,   -- added in supabase_schema_phase3.sql
   created_at
 
 spaces
@@ -145,8 +146,10 @@ notifications
 ### Schema files
 - `supabase_schema.sql` -- core schema (users, spaces, notes, widgets, files, reminder_deliveries, notifications + RLS + triggers)
 - `supabase_schema_phase2.sql` -- additive: `notes.is_locked`, `note_versions` table + RLS
+- `supabase_schema_phase3.sql` -- additive: `users.app_background_preference`,
+  `users.background_tint_preference` + CHECK constraints
 
-Both files are idempotent (safe to re-run).
+All three files are idempotent (safe to re-run).
 
 ---
 
@@ -218,6 +221,34 @@ strips the param from the URL so a refresh does not reopen it.
 
 Creation triggers must live in click handlers, never in useEffect. This pattern is established in
 FAB.tsx and must be followed for all note/widget creation code.
+
+### 9. Never write a literal colour in a component
+
+Every colour comes from a CSS custom property declared in `globals.css`. `tailwind.config.ts`
+maps the whole palette onto those properties, so `bg-bg-base`, `text-text-primary`,
+`border-border-default` and the rest follow the theme automatically. A hard-coded hex,
+`bg-white`, or `bg-black/30` re-creates the half-dark bug this replaced.
+
+Two consequences to remember:
+- Tailwind's `/opacity` modifier does **not** work on a `var()` colour. Use
+  `--accent-wash-strong`, `--accent-wash-soft`, `--scrim`, `--scrim-strong`, or an explicit
+  `color-mix()`.
+- Text on a filled accent surface uses `text-accent-ink`, not `text-white` -- the accent can be
+  Sand or Sage, which white does not read on.
+
+Space colours are user data and are legitimately inline; that is the exception.
+
+### 10. Service role bypasses RLS -- every query carries its own filter
+
+All server queries use the Supabase **service role** client, so the RLS policies in
+`supabase_schema.sql` never execute. A missing `.eq('user_id', userId)` is a cross-tenant data
+leak with nothing behind it.
+
+A row-level filter is not enough when the request body also supplies a foreign key
+(`note_id`, `space_id`, `widget_id`, `parent_id`, `r2_object_key`). Resolve those through
+`lib/ownership.ts` (`ownsNote` / `ownsSpace` / `ownsWidget` / `isUuid`) and return 404 when the
+reference is not the caller's. See `SECURITY_REVIEW.md` for the four routes where this was
+missing and what it allowed.
 
 ---
 
@@ -363,6 +394,36 @@ Note card hover: translateY(-2px) + enhanced shadow
 FAB open:        rotate(45deg) + background #738290, 0.15s
 Cursor blink:    pulse -- opacity 1 to 0.4 to 1, 1.1s ease infinite
 ```
+
+---
+
+## Theming Architecture
+
+`lib/theme.ts` is the single source of truth. It is pure and framework-free, and both sides use
+the same output:
+
+- **Server:** `src/app/layout.tsx` loads the signed-in user's preference columns, calls
+  `resolveTheme()`, and renders the resulting `data-*` attributes and CSS custom properties
+  directly onto `<html>`. This is why the theme survives a reload with no flash, and why
+  `/login` and `/signup` are themed too.
+- **Client:** `applyPreferences()` in `lib/preferences.ts` writes the identical output to
+  `document.documentElement` when a setting changes, and mirrors it into `localStorage`. A tiny
+  blocking script in `<head>` replays that cache when the server had no session to read.
+
+`resolveTheme()` derives the accent chip fill (`--accent-blue-bg`) and its ink
+(`--accent-blue-dark`) **per theme** -- a wash toward white in light mode, toward the dark base
+in dark mode. The locked Soft Blue pair (`#dce8f6` / `#4a6090`) is used verbatim rather than
+derived, so the default look is unchanged.
+
+`PreferencesProvider` lives in `app/providers.tsx` at the root, not in the app shell.
+
+Attributes on `<html>`: `data-theme`, `data-density`, `data-surface` (omitted when "clean"),
+`data-app-bg`, `data-tint`.
+
+The app canvas is `.app-canvas` on the shell root. Its `::before` carries the background graphic
+at `z-index: -1` inside a stacking context, so no child needs a z-index and the fixed navbar, tab
+bar and FAB are untouched. `.note-paper` always paints `--bg-base`: the background customisation
+is for dashboards, never for the surface you write on.
 
 ---
 
@@ -553,11 +614,16 @@ Settings page (`/settings`) has two tabs: **Profile** and **Appearance**.
 **Appearance tab options:**
 - Accent color: 6 presets (Soft Blue, Sage, Sand, Rose, Plum, Slate). Applied live to CSS vars.
 - Typography: Sans-serif / Serif (Newsreader).
-- Theme: Light / Dark. **Dark is opt-in only -- never inherited from OS.** (System auto-detect was removed because the dark palette only covers CSS custom properties, not Tailwind color classes, producing a half-dark app.)
+- Theme: Light / Dark. **Dark is opt-in only -- never inherited from OS.** This is now a
+  product choice, not a limitation: the dark palette is complete (see Theming below).
 - Density: Compact / Comfortable / Spacious.
+- App background: Plain / Dots / Grid / Diagonal / Rings / Glow -- the graphic on the app canvas
+  behind Home, Storeroom, My Room, Search, Calendar and Spaces. Never applies to the note editor.
+- Page tint: Neutral / Warm / Cool / Mint / Blush / Accent -- the canvas colour behind cards.
 - Landing page: Home / My Room / Storeroom.
 
-Preferences stored in `users` table. Applied client-side via `PreferencesProvider` in `lib/preferences.ts`.
+Preferences are stored in `users` and validated server-side in `/api/users` against the enums
+exported by `lib/theme.ts`.
 
 ---
 
@@ -736,7 +802,10 @@ src/
     api-helpers.ts             -- requireAuth, apiError helpers
     dnd.ts                     -- drag-and-drop helpers (custom MIME type, move note)
     export.ts                  -- TipTap JSON to Markdown / plain text
+    theme.ts                   -- pure theme resolver (server + client); preference enums
     preferences.ts             -- PreferencesProvider + usePreferences hook + applyPreferences()
+    ownership.ts               -- ownsNote / ownsSpace / ownsWidget / isUuid (see rule 10)
+    ratelimit.ts               -- in-memory fixed-window limiter (per-instance; see SECURITY_REVIEW.md)
     spaces.ts                  -- useSpaces hook (fetches + caches spaces tree)
     spaceColor.ts              -- spaceChipStyle() + spaceDotColor() dynamic color derivation
     resend.ts                  -- sendReminderEmail() via Resend SDK
@@ -874,6 +943,8 @@ deleteFromR2(key: string): Promise<void>
 
 ## Session Notes for Claude Code
 
+- `SECURITY_REVIEW.md` holds the current security posture and the outstanding items,
+  in priority order. Read it before touching auth, the API routes, or file handling.
 - For GitHub push: use Classic PAT with `repo` scope embedded in remote URL:
   `git remote set-url origin https://<PAT>@github.com/Bogi674/ruang-project-management.git`
 - PAT: stored in your password manager (classic PAT, repo scope, valid November 2026)

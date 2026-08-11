@@ -443,7 +443,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
           onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
           onDoubleClick={() => onWidthChange(280)}
           className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize group ${
-            resizing ? 'bg-accent-blue' : 'hover:bg-accent-blue/40'
+            resizing ? 'bg-accent-blue' : 'hover:bg-[var(--accent-wash-strong)]'
           } transition-colors duration-120`}
           title="Drag to resize · double-click to reset"
         />
@@ -512,7 +512,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
       {/* Delete confirmation modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteConfirm(null)} />
+          <div className="absolute inset-0" style={{ background: 'var(--scrim)' }} onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-bg-base rounded-[14px] p-6 w-[360px] shadow-modal">
             <h3 className="font-serif text-[17px] text-text-primary mb-2" style={{ letterSpacing: '-0.01em' }}>
               Delete &ldquo;{deleteConfirm.name}&rdquo;?

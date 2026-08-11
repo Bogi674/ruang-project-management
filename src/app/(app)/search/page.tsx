@@ -19,11 +19,21 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
 
   if (query) {
     const db = createServerClient();
+    /*
+     * `.ilike()`, not `.or('title.ilike.%…%')`.
+     *
+     * The `.or()` form builds a PostgREST filter expression by string
+     * concatenation, so a query containing a comma or a parenthesis injects
+     * extra filter terms into it. Escaping the LIKE metacharacters as well
+     * keeps a `%` typed by the user as a literal percent sign rather than a
+     * wildcard that matches the whole table.
+     */
+    const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const { data } = await db
       .from('notes')
       .select('*, space:spaces(*)')
       .eq('user_id', userId)
-      .or(`title.ilike.%${query}%`)
+      .ilike('title', pattern)
       .order('updated_at', { ascending: false })
       .limit(30);
     results = data || [];

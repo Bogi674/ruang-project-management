@@ -8,34 +8,47 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      /*
+       * Every colour is a pointer at a CSS custom property declared in
+       * globals.css, never a literal. That is what makes dark mode complete:
+       * `[data-theme="dark"]` re-declares the properties once and every
+       * Tailwind utility in the app follows. Adding a raw hex here (or in a
+       * component) re-opens the half-dark bug this replaced.
+       *
+       * Note: Tailwind's `/opacity` modifier cannot apply to a bare `var()`.
+       * Where a translucent accent is needed, use an explicit colour-mix or
+       * rgba value in the component instead of `bg-accent-blue/40`.
+       */
       colors: {
-        'text-primary': '#2c3848',
-        'text-secondary': '#738290',
-        'text-muted': '#9aaab8',
-        'text-faint': '#b8c8d6',
-        'bg-base': '#ffffff',
-        'bg-subtle': '#f4f5f7',
-        'bg-surface': '#f8fafc',
-        'bg-elevated': '#edf3fa',
-        'bg-page': '#f6f8fb',
-        'border-default': '#e8ecf2',
-        'border-light': '#f2f5f8',
-        'border-medium': '#d8e0ea',
-        'accent-blue': '#A1B5D8',
-        'accent-blue-dark': '#4a6090',
-        'accent-blue-bg': '#dce8f6',
-        'accent-green': '#E4F0D0',
-        'accent-green-mid': '#C2D8B9',
-        'accent-green-dark': '#4a6a40',
-        'accent-slate': '#738290',
-        'accent-slate-dark': '#4a5a68',
-        'accent-amber': '#E8B23C',
-        'accent-amber-dark': '#A9761A',
-        'accent-amber-bg': '#FDF3DC',
-        danger: '#F08050',
-        'danger-dark': '#E06830',
-        'danger-bg': '#fff4ee',
-        'danger-border': '#f8c8a8',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
+        'text-faint': 'var(--text-faint)',
+        'bg-base': 'var(--bg-base)',
+        'bg-subtle': 'var(--bg-subtle)',
+        'bg-surface': 'var(--bg-surface)',
+        'bg-elevated': 'var(--bg-elevated)',
+        'bg-page': 'var(--bg-page)',
+        'border-default': 'var(--border-default)',
+        'border-light': 'var(--border-light)',
+        'border-medium': 'var(--border-medium)',
+        'accent-blue': 'var(--accent-blue)',
+        'accent-blue-dark': 'var(--accent-blue-dark)',
+        'accent-blue-bg': 'var(--accent-blue-bg)',
+        // Foreground that stays legible on a filled accent surface.
+        'accent-ink': 'var(--accent-ink)',
+        'accent-green': 'var(--accent-green)',
+        'accent-green-mid': 'var(--accent-green-mid)',
+        'accent-green-dark': 'var(--accent-green-dark)',
+        'accent-slate': 'var(--accent-slate)',
+        'accent-slate-dark': 'var(--accent-slate-dark)',
+        'accent-amber': 'var(--accent-amber)',
+        'accent-amber-dark': 'var(--accent-amber-dark)',
+        'accent-amber-bg': 'var(--accent-amber-bg)',
+        danger: 'var(--danger)',
+        'danger-dark': 'var(--danger-dark)',
+        'danger-bg': 'var(--danger-bg)',
+        'danger-border': 'var(--danger-border)',
       },
       fontFamily: {
         serif: ['Newsreader', 'Georgia', 'serif'],
@@ -55,12 +68,12 @@ const config: Config = {
         '15': '15px',
       },
       boxShadow: {
-        card: '0 1px 4px rgba(44,56,72,.04)',
-        'card-hover': '0 6px 20px rgba(44,56,72,.09)',
-        modal: '0 16px 56px rgba(44,56,72,.14), 0 2px 8px rgba(44,56,72,.06)',
-        fab: '0 4px 16px rgba(161,181,216,.4)',
-        'fab-hover': '0 8px 28px rgba(161,181,216,.5)',
-        'fab-menu': '0 8px 32px rgba(44,56,72,.13), 0 2px 6px rgba(44,56,72,.06)',
+        card: 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
+        modal: 'var(--shadow-modal)',
+        fab: 'var(--shadow-fab)',
+        'fab-hover': 'var(--shadow-fab-hover)',
+        'fab-menu': 'var(--shadow-fab-menu)',
       },
       borderRadius: {
         card: '12px',

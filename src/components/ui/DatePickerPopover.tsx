@@ -162,7 +162,7 @@ export function DatePickerPopover({ value, onChange, onClose, anchorRef }: DateP
               onClick={() => { onChange(iso); onClose(); }}
               className={`h-8 w-8 mx-auto flex items-center justify-center rounded-full text-[12.5px] transition-colors duration-120 ${
                 isSelected
-                  ? 'bg-accent-blue text-white font-semibold'
+                  ? 'bg-accent-blue text-accent-ink font-semibold'
                   : isToday
                   ? 'text-accent-blue-dark font-semibold ring-1 ring-accent-blue hover:bg-accent-blue-bg'
                   : 'text-text-secondary hover:bg-bg-surface'

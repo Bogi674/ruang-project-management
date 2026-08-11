@@ -49,8 +49,15 @@ export default function SignupPage() {
       if (result?.ok) {
         router.push('/home');
       } else {
-        setError('Account created. Please sign in.');
-        router.push('/login');
+        /*
+         * Two cases land here and the server deliberately does not say which:
+         * a brand-new account whose session did not start, and an address that
+         * already had an account (the register route answers identically so it
+         * cannot be used to test whether an email is registered). One message
+         * covers both, and sign-in is the right next step either way.
+         */
+        setError('Could not sign you in. Try signing in with these details — or, if you already have an account, use your existing password.');
+        setLoading(false);
       }
     } catch {
       setError('Something went wrong. Please try again.');

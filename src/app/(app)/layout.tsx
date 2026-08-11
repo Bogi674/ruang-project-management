@@ -10,7 +10,6 @@ import { MobileTabBar } from '@/components/layout/MobileTabBar';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { FAB } from '@/components/layout/FAB';
 import { KeyboardShortcutsPanel } from '@/components/layout/KeyboardShortcutsPanel';
-import { PreferencesProvider } from '@/lib/preferences';
 
 const SIDEBAR_WIDTH_KEY = 'ruang_sidebar_width';
 // Wide enough that the sidebar reaches roughly the gap between the "Calendar"
@@ -57,7 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-bg-page flex items-center justify-center">
+      <div className="min-h-screen app-canvas flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -69,8 +68,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isNote = pathname?.startsWith('/note');
 
   return (
-    <PreferencesProvider>
-      <div className="min-h-screen bg-bg-base">
+    <>
+      {/*
+        `app-canvas` is the tinted, optionally patterned surface the whole app
+        sits on. Cards and the writing column paint their own --bg-base on top
+        of it, so the background customisation never bleeds into content.
+      */}
+      <div className="min-h-screen app-canvas">
         {/* Desktop */}
         <div className="hidden md:block">
           <TopNavbar
@@ -119,6 +123,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {showShortcuts && <KeyboardShortcutsPanel onClose={() => setShowShortcuts(false)} />}
       </div>
-    </PreferencesProvider>
+    </>
   );
 }
