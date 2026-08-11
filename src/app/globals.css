@@ -22,7 +22,7 @@
     --bg-subtle: #f4f5f7;
     --bg-surface: #f8fafc;
     --bg-elevated: #edf3fa;
-    --bg-page: #f6f8fb;
+    --bg-page: #f1f4f8;
 
     /* Borders */
     --border-default: #e8ecf2;
@@ -60,15 +60,15 @@
 
     /* Page canvas — the surface behind cards. Driven by the background-tint
        preference; the literals here are only the pre-hydration fallback. */
-    --canvas-base: #f4f7fb;
-    --canvas-ink: rgba(44,56,72,0.055);
-    --canvas-glow: #e4ecf7;
+    --canvas-base: #f1f4f8;
+    --canvas-ink: rgba(44,56,72,0.07);
+    --canvas-glow: #dfe7f4;
 
     /* Warm-paper note surface, and the higher-contrast ink used to draw
        pattern swatches in Settings (the real patterns are far subtler than a
        36px preview tile can show). */
     --surface-warm: #faf7f0;
-    --preview-ink: rgba(44,56,72,0.20);
+    --preview-ink: rgba(44,56,72,0.24);
 
     /* Semantic pairs used by the calendar and the reminder rows, so those
        stop reaching for literal ambers and greens that cannot go dark. */
@@ -160,66 +160,74 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --text-primary:    #dfe6f0;
-  --text-secondary:  #a4b3c4;
-  --text-muted:      #7c8b9c;
-  --text-faint:      #5b6a7b;
-  --heading-color:   #f2f6fb;
-  --editor-ink:      #ccd7e4;
+  /*
+   * Neutral greys, not navy.
+   *
+   * The first pass carried the light theme's blue undertone into the dark one,
+   * which reads as a "blue app at night" rather than as dark. These are
+   * near-neutral with a barely-there warm cast, the register Notion and Claude
+   * use: the page recedes and the writing is the only thing with colour.
+   */
+  --text-primary:    #e8e8e6;
+  --text-secondary:  #b2b2ae;
+  --text-muted:      #8a8a85;
+  --text-faint:      #6a6a65;
+  --heading-color:   #f5f5f3;
+  --editor-ink:      #d2d2ce;
 
-  --bg-base:         #1c2130;
-  --bg-subtle:       #171c28;
-  --bg-surface:      #232b3b;
-  --bg-elevated:     #2b3446;
-  --bg-page:         #12161f;
+  --bg-base:         #212121;
+  --bg-subtle:       #1a1a1a;
+  --bg-surface:      #262626;
+  --bg-elevated:     #2f2f2f;
+  --bg-page:         #171717;
 
-  --border-default:  #303a4b;
-  --border-light:    #272f3e;
-  --border-medium:   #3c4859;
+  --border-default:  #303030;
+  --border-light:    #272727;
+  --border-medium:   #3d3d3d;
 
   /* Greens and ambers are re-pitched rather than dropped: the same semantic
      roles (space chips, pinned stars) need to stay recognisable but must read
      as ink-on-dark instead of dark-on-pastel. */
-  --accent-green:      #2c3a2a;
+  --accent-green:      #2a3327;
   --accent-green-mid:  #4a6a40;
-  --accent-green-dark: #b6d9a6;
+  --accent-green-dark: #b3d4a4;
 
   /* accent-slate is only ever a *filled button* background, so it has to stay
      dark enough for white text (~4.8:1) rather than drift pale. The -dark
      variant is the hover state and therefore lightens here, not darkens. */
-  --accent-slate:      #5c6b7e;
-  --accent-slate-dark: #6f8095;
+  --accent-slate:      #5f5f5c;
+  --accent-slate-dark: #737370;
 
   --accent-amber:      #E8B23C;
-  --accent-amber-dark: #F0C978;
-  --accent-amber-bg:   #3a2f16;
+  --accent-amber-dark: #EFC97A;
+  --accent-amber-bg:   #352b16;
 
-  --danger:        #F08050;
-  --danger-dark:   #F79A72;
-  --danger-bg:     #3a2018;
-  --danger-border: #7a4028;
+  --danger:        #E8825A;
+  --danger-dark:   #F09A78;
+  --danger-bg:     #331e16;
+  --danger-border: #6b3d29;
 
   /* Fallbacks only. resolveTheme() writes the real accent-derived values
      inline on <html>, and inline styles win — but if that inline block is
      ever missing (a stale pre-paint cache, JS disabled) these keep the page
      dark instead of dropping back to a white canvas under dark text. */
-  --canvas-base: #12161f;
-  --canvas-glow: #26303f;
-  --accent-blue-bg: #262f40;
+  --canvas-base: #171717;
+  --canvas-glow: #2b2b2b;
+  --accent-blue-bg: #2b2f36;
   --accent-blue-dark: #b6c6e2;
 
-  --canvas-ink:  rgba(255,255,255,0.055);
-  --surface-warm: #1d1a13;
-  --preview-ink: rgba(255,255,255,0.22);
+  --canvas-ink:  rgba(255,255,255,0.07);
+  --surface-warm: #1e1a14;
+  --preview-ink: rgba(255,255,255,0.24);
 
-  --chip-note-bg:     #33270f;
-  --chip-note-ink:    #f0c978;
-  --chip-note-dot:    #f59e0b;
-  --chip-note-border: #5c4519;
-  --chip-task-bg:     #22301e;
-  --chip-task-ink:    #b6d9a6;
+  --chip-note-bg:     #322715;
+  --chip-note-ink:    #efc97a;
+  --chip-note-dot:    #f0a53c;
+  --chip-note-border: #574323;
+  --chip-task-bg:     #212c1e;
+  --chip-task-ink:    #b3d4a4;
   --chip-task-dot:    #82b472;
-  --chip-task-border: #3f5a35;
+  --chip-task-border: #3c5134;
 
   /* On a dark page a navy-tinted shadow is invisible; depth has to come from
      near-black plus a hairline highlight. */
@@ -539,17 +547,15 @@
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
-/* Logo theme tokens */
-:root {
-  --logo-stroke: #1a1a1a;
-  --logo-fill: #d4d4d4;
-  --logo-text: #1a1a1a;
-}
-:root[data-theme="dark"] {
-  --logo-stroke: #ffffff;
-  --logo-fill: rgba(255,255,255,0.18);
-  --logo-text: #ffffff;
-}
+/* ── Logo ──
+ * The wordmark and Y-mark are PNGs with baked-in ink, so the dark theme swaps
+ * to the reversed artwork. Both files are in the DOM and CSS picks one, which
+ * keeps the choice in the same pass as the rest of the theme — a JS swap would
+ * flash the light logo on every load.
+ */
+.logo-dark  { display: none; }
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="dark"] .logo-dark  { display: block; }
 
 /* ── Tables (TipTap) ── */
 .tiptap-editor .ProseMirror table {

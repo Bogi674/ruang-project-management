@@ -417,6 +417,20 @@ derived, so the default look is unchanged.
 
 `PreferencesProvider` lives in `app/providers.tsx` at the root, not in the app shell.
 
+The dark palette is **neutral grey, not navy** (`--bg-base: #212121`, canvas `#171717`) — the
+Notion/Claude register. `DARK_BASE` in `lib/theme.ts` must stay in step with `--bg-base`, since
+the accent chip fill is mixed toward it; a tinted value there is what puts a colour cast over
+the whole dark theme.
+
+The logo is PNG artwork with baked-in ink, so dark mode swaps to the `_reversed` files. Both
+images are rendered and `.logo-light` / `.logo-dark` are toggled in CSS — picking the source in
+JS would flash the light logo on every load.
+
+**The app shell offsets its fixed chrome with padding, never margin.** `mt-[52px]` on `<main>`
+collapsed through the wrapper divs to `<body>` (none of them establishes a BFC), pushing the
+100vh canvas down and making the document 52px taller than the viewport — a phantom scroll that
+showed a band of bare canvas and let pages sit part-scrolled under the navbar.
+
 Attributes on `<html>`: `data-theme`, `data-density`, `data-surface` (omitted when "clean"),
 `data-app-bg`, `data-tint`.
 

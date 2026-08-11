@@ -111,21 +111,29 @@ export function contrastInk(hex: string): string {
 /* ── palettes ───────────────────────────────────────────────────────────── */
 
 const LIGHT_BASE = '#ffffff';
-const DARK_BASE = '#1c2130';
+// Neutral grey, matching --bg-base in the dark block of globals.css. Accent
+// derivatives mix toward this, so a navy value here is what used to give the
+// whole dark theme a blue cast.
+const DARK_BASE = '#212121';
 
 /**
  * Page canvas colours. The canvas is the surface *behind* cards — sidebar,
  * dashboard backdrop, calendar gutters — so it is always a shade away from
  * `--bg-base`, never equal to it.
+ *
+ * These are pitched to be *seen*. The first set sat within a couple of points
+ * of neutral, which meant switching tint looked like nothing had happened;
+ * these are far enough apart to read as a choice while staying quiet enough to
+ * sit under a page of text all day.
  */
 const TINTS: Record<BackgroundTintValue, { light: string; dark: string }> = {
-  neutral: { light: '#f4f7fb', dark: '#12161f' },
-  warm: { light: '#faf6ef', dark: '#1a1611' },
-  cool: { light: '#eff5fc', dark: '#101720' },
-  mint: { light: '#f0f7f2', dark: '#101a15' },
-  blush: { light: '#fbf3f5', dark: '#1b1418' },
+  neutral: { light: '#f1f4f8', dark: '#171717' },
+  warm: { light: '#f8efe1', dark: '#241d13' },
+  cool: { light: '#e8f0fb', dark: '#141b26' },
+  mint: { light: '#e7f3e9', dark: '#14201a' },
+  blush: { light: '#fbeaf0', dark: '#241620' },
   // `accent` is derived from the user's accent colour at resolve time.
-  accent: { light: '#f4f7fb', dark: '#12161f' },
+  accent: { light: '#f1f4f8', dark: '#171717' },
 };
 
 /**
@@ -193,11 +201,13 @@ export function resolveTheme(prefs: Partial<UserPreferences> | null | undefined)
   const accentBg = locked?.bg ?? (isDark ? mix(accent, DARK_BASE, 0.76) : mix(accent, LIGHT_BASE, 0.82));
   const accentInk = locked?.ink ?? (isDark ? mix(accent, '#ffffff', 0.42) : mix(accent, '#000000', 0.4));
 
+  // The accent tint keeps more of the accent than the named tints do — it is
+  // the option people pick precisely because they want to see their colour.
   const canvas =
     tint === 'accent'
       ? isDark
-        ? mix(accent, '#0d1017', 0.9)
-        : mix(accent, '#ffffff', 0.9)
+        ? mix(accent, '#141414', 0.84)
+        : mix(accent, '#ffffff', 0.84)
       : TINTS[tint][isDark ? 'dark' : 'light'];
 
   const vars: Record<string, string> = {
@@ -209,8 +219,8 @@ export function resolveTheme(prefs: Partial<UserPreferences> | null | undefined)
     '--canvas-base': canvas,
     // Pattern ink for the app background graphics: dark strokes on light
     // canvases, light strokes on dark ones.
-    '--canvas-ink': isDark ? 'rgba(255,255,255,0.055)' : 'rgba(44,56,72,0.055)',
-    '--canvas-glow': isDark ? mix(accent, DARK_BASE, 0.62) : mix(accent, LIGHT_BASE, 0.72),
+    '--canvas-ink': isDark ? 'rgba(255,255,255,0.07)' : 'rgba(44,56,72,0.07)',
+    '--canvas-glow': isDark ? mix(accent, canvas, 0.55) : mix(accent, canvas, 0.62),
     '--font-body':
       typography === 'serif'
         ? "'Newsreader', Georgia, serif"

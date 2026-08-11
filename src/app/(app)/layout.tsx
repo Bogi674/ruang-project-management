@@ -85,8 +85,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onShowShortcuts={() => setShowShortcuts(true)}
           />
           {!focusMode && <Sidebar width={sidebarWidth} onWidthChange={handleSidebarWidth} />}
+          {/*
+            Padding, not margin.
+
+            `mt-[52px]` collapsed straight through these wrapper divs to
+            <body> — none of them establishes a block formatting context — so
+            the 100vh canvas started 52px down and the document ended up 52px
+            taller than the viewport. That bought a phantom scroll: scrolling
+            revealed a band of bare canvas under the content, and a page could
+            sit part-scrolled with its title tucked under the fixed navbar.
+            Padding cannot collapse, and min-h-screen is correct because
+            box-sizing is border-box globally.
+          */}
           <main
-            className="mt-[52px] min-h-[calc(100vh-52px)]"
+            className="pt-[52px] min-h-screen"
             style={{ marginLeft: focusMode ? 0 : sidebarWidth }}
           >
             <div className="animate-fadeUp">{children}</div>
