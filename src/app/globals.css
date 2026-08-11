@@ -6,12 +6,16 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+
     /* Text */
     --text-primary: #2c3848;
     --text-secondary: #738290;
     --text-muted: #9aaab8;
     --text-faint: #b8c8d6;
     --heading-color: #10161f;
+    /* Body copy inside the editor sits a touch lighter than headings. */
+    --editor-ink: #3a4a5c;
 
     /* Backgrounds */
     --bg-base: #ffffff;
@@ -49,6 +53,40 @@
     --accent-amber: #E8B23C;
     --accent-amber-dark: #A9761A;
     --accent-amber-bg: #FDF3DC;
+
+    /* Readable foreground on a filled accent surface (FAB, today pill, chips).
+       Recomputed per accent colour by resolveTheme(). */
+    --accent-ink: #ffffff;
+
+    /* Page canvas — the surface behind cards. Driven by the background-tint
+       preference; the literals here are only the pre-hydration fallback. */
+    --canvas-base: #f4f7fb;
+    --canvas-ink: rgba(44,56,72,0.055);
+    --canvas-glow: #e4ecf7;
+
+    /* Warm-paper note surface, and the higher-contrast ink used to draw
+       pattern swatches in Settings (the real patterns are far subtler than a
+       36px preview tile can show). */
+    --surface-warm: #faf7f0;
+    --preview-ink: rgba(44,56,72,0.20);
+
+    /* Semantic pairs used by the calendar and the reminder rows, so those
+       stop reaching for literal ambers and greens that cannot go dark. */
+    --chip-note-bg: #fef9ee;
+    --chip-note-ink: #92400e;
+    --chip-note-dot: #f59e0b;
+    --chip-note-border: #fde68a;
+    --chip-task-bg: #f0f7eb;
+    --chip-task-ink: #4a6a40;
+    --chip-task-dot: #82b472;
+    --chip-task-border: #C2D8B9;
+
+    /* Translucent accent washes. Tailwind's `/opacity` modifier does not work
+       on a bare var(), so the few places that need one read these instead. */
+    --accent-wash-strong: color-mix(in srgb, var(--accent-blue) 40%, transparent);
+    --accent-wash-soft: color-mix(in srgb, var(--accent-blue) 15%, transparent);
+    --scrim: rgba(20,26,36,0.32);
+    --scrim-strong: rgba(20,26,36,0.52);
 
     /* Space color — injected per-space via inline style on the space page root.
        Falls back to accent-blue so any rule using it is safe on non-space pages. */
@@ -98,29 +136,179 @@
   body {
     font-family: var(--font-body, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
     color: var(--text-primary);
-    background: var(--bg-base);
+    /* The canvas, not the card colour — the app shell layers cards on top of
+       it, and it is what the background-tint preference recolours. */
+    background: var(--canvas-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* ── Dark theme ── */
+/*
+ * ── Dark theme ──
+ *
+ * This block is the whole palette, not a partial one. Because tailwind.config
+ * maps every colour utility onto these same custom properties, re-declaring
+ * them here is enough to take the entire app dark — chrome, cards, chips,
+ * shadows and editor alike.
+ *
+ * Accent derivatives (--accent-blue-dark / --accent-blue-bg) are NOT set here:
+ * they depend on the user's chosen accent colour and are computed per theme by
+ * resolveTheme() in lib/theme.ts, then written inline onto <html>. Inline
+ * styles beat these rules, which is exactly the intent.
+ */
 :root[data-theme="dark"] {
-  --text-primary:    #dde4ed;
-  --text-secondary:  #a8b8c8;
-  --text-muted:      #6a7a8a;
-  --text-faint:      #445060;
+  color-scheme: dark;
+
+  --text-primary:    #dfe6f0;
+  --text-secondary:  #a4b3c4;
+  --text-muted:      #7c8b9c;
+  --text-faint:      #5b6a7b;
   --heading-color:   #f2f6fb;
+  --editor-ink:      #ccd7e4;
 
   --bg-base:         #1c2130;
-  --bg-subtle:       #161b26;
-  --bg-surface:      #212838;
-  --bg-elevated:     #283040;
-  --bg-page:         #141820;
+  --bg-subtle:       #171c28;
+  --bg-surface:      #232b3b;
+  --bg-elevated:     #2b3446;
+  --bg-page:         #12161f;
 
-  --border-default:  #2e3a4a;
-  --border-light:    #242f3e;
-  --border-medium:   #364555;
+  --border-default:  #303a4b;
+  --border-light:    #272f3e;
+  --border-medium:   #3c4859;
+
+  /* Greens and ambers are re-pitched rather than dropped: the same semantic
+     roles (space chips, pinned stars) need to stay recognisable but must read
+     as ink-on-dark instead of dark-on-pastel. */
+  --accent-green:      #2c3a2a;
+  --accent-green-mid:  #4a6a40;
+  --accent-green-dark: #b6d9a6;
+
+  /* accent-slate is only ever a *filled button* background, so it has to stay
+     dark enough for white text (~4.8:1) rather than drift pale. The -dark
+     variant is the hover state and therefore lightens here, not darkens. */
+  --accent-slate:      #5c6b7e;
+  --accent-slate-dark: #6f8095;
+
+  --accent-amber:      #E8B23C;
+  --accent-amber-dark: #F0C978;
+  --accent-amber-bg:   #3a2f16;
+
+  --danger:        #F08050;
+  --danger-dark:   #F79A72;
+  --danger-bg:     #3a2018;
+  --danger-border: #7a4028;
+
+  /* Fallbacks only. resolveTheme() writes the real accent-derived values
+     inline on <html>, and inline styles win — but if that inline block is
+     ever missing (a stale pre-paint cache, JS disabled) these keep the page
+     dark instead of dropping back to a white canvas under dark text. */
+  --canvas-base: #12161f;
+  --canvas-glow: #26303f;
+  --accent-blue-bg: #262f40;
+  --accent-blue-dark: #b6c6e2;
+
+  --canvas-ink:  rgba(255,255,255,0.055);
+  --surface-warm: #1d1a13;
+  --preview-ink: rgba(255,255,255,0.22);
+
+  --chip-note-bg:     #33270f;
+  --chip-note-ink:    #f0c978;
+  --chip-note-dot:    #f59e0b;
+  --chip-note-border: #5c4519;
+  --chip-task-bg:     #22301e;
+  --chip-task-ink:    #b6d9a6;
+  --chip-task-dot:    #82b472;
+  --chip-task-border: #3f5a35;
+
+  /* On a dark page a navy-tinted shadow is invisible; depth has to come from
+     near-black plus a hairline highlight. */
+  --shadow-card:       0 1px 3px rgba(0,0,0,.36);
+  --shadow-card-hover: 0 8px 24px rgba(0,0,0,.48);
+  --shadow-modal:      0 18px 60px rgba(0,0,0,.62), 0 2px 10px rgba(0,0,0,.42);
+  --shadow-fab-menu:   0 10px 34px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+
+  --scrim:        rgba(0,0,0,0.55);
+  --scrim-strong: rgba(0,0,0,0.7);
+}
+
+/* ── App canvas ──
+ * The surface the whole authenticated app sits on. `--canvas-base` carries
+ * the background-tint preference; the ::before layer carries the background
+ * graphic, chosen with [data-app-bg] on <html>.
+ *
+ * The graphic lives on a fixed, pointer-events-none pseudo-element rather than
+ * on the scrolling element itself so the pattern stays put while content
+ * scrolls, and so no interactive target is ever covered by it.
+ */
+.app-canvas {
+  /* z-index:0 makes this a stacking context so the negative-z graphic below
+     paints above the canvas colour but behind every child — no z-index or
+     position rules on the children, which would have broken the fixed
+     navbar, tab bar and FAB. */
+  position: relative;
+  z-index: 0;
+  background-color: var(--canvas-base);
+}
+.app-canvas::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: repeat;
+}
+
+[data-app-bg="plain"] .app-canvas::before { display: none; }
+
+[data-app-bg="dots"] .app-canvas::before {
+  background-image: radial-gradient(circle, var(--canvas-ink) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+[data-app-bg="grid"] .app-canvas::before {
+  background-image:
+    linear-gradient(to right, var(--canvas-ink) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-ink) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+[data-app-bg="diagonal"] .app-canvas::before {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--canvas-ink) 0,
+    var(--canvas-ink) 1px,
+    transparent 1px,
+    transparent 9px
+  );
+}
+
+/* Soft horizontal bands — a calm "paper texture" without an image asset. */
+[data-app-bg="waves"] .app-canvas::before {
+  background-image: repeating-radial-gradient(
+    circle at 50% -20%,
+    var(--canvas-ink) 0,
+    var(--canvas-ink) 1px,
+    transparent 1px,
+    transparent 46px
+  );
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* Two accent-tinted pools bled into the corners. Uses --canvas-glow, which is
+   the user's accent mixed most of the way into the page colour, so it reads as
+   atmosphere rather than as a coloured block. */
+[data-app-bg="glow"] .app-canvas::before {
+  background-image:
+    radial-gradient(58vw 46vh at 12% 0%, var(--canvas-glow) 0%, transparent 68%),
+    radial-gradient(52vw 44vh at 92% 100%, var(--canvas-glow) 0%, transparent 66%);
+  background-repeat: no-repeat;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-canvas::before { display: none; }
 }
 
 /* ── Density ── */
@@ -190,7 +378,7 @@
   min-height: 300px;
   font-size: 14.5px;
   line-height: 1.78;
-  color: #3a4a5c;
+  color: var(--editor-ink);
 }
 
 .tiptap-editor .ProseMirror > * + * { margin-top: 0.6em; }
@@ -306,7 +494,22 @@
   border-bottom: 2px solid white;
   transform: rotate(-45deg);
 }
-.tiptap-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+/*
+ * Checking an item strikes through that item only — never its sub-items.
+ *
+ * TaskItem renders as `li > [label, div]` and its content is `paragraph
+ * block*`, so a nested taskList is a *sibling of the item's own paragraph
+ * inside the same div*. Decorating that div therefore reached every
+ * descendant: `text-decoration` propagates into descendant boxes and cannot be
+ * cancelled from below, and `color` is inherited — so ticking a level-1 item
+ * struck out and greyed the whole level-2/3 subtree regardless of each
+ * sub-item's own checked state.
+ *
+ * Excluding the nested list containers from the selector keeps the decoration
+ * on the item's own paragraph (and any non-list block it owns), leaving each
+ * sub-item to render from its own [data-checked] value.
+ */
+.tiptap-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > *:not(ul):not(ol) {
   text-decoration: line-through;
   color: var(--text-muted);
 }
@@ -420,13 +623,17 @@
  * "clean" is the default — no rules needed.
  */
 
+/* The writing column is always paper, never the tinted/patterned app canvas —
+   the background customisation is for dashboards, not for the page you write
+   on. Surface rules below override this by specificity. */
+.note-paper {
+  background-color: var(--bg-base);
+}
+
 /* Warm paper: applied to the outer .note-paper so the cream tone covers
    the full writing column, not just the ProseMirror scroll box. */
 [data-surface="warm"] .note-paper {
-  background-color: #faf7f0;
-}
-[data-theme="dark"][data-surface="warm"] .note-paper {
-  background-color: #1d1a13;
+  background-color: var(--surface-warm);
 }
 
 /* Dot grid

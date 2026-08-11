@@ -68,9 +68,9 @@ export default async function RoomPage() {
               {upcoming.map((w) => {
                 const c = w.content as { title?: string; date?: string; time?: string; type_label?: string };
                 return (
-                  <div key={w.id} className="flex items-center gap-3 p-3 rounded-lg bg-[#fff4ee]">
-                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F08050" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <div key={w.id} className="flex items-center gap-3 p-3 rounded-lg bg-danger-bg">
+                    <div className="w-8 h-8 rounded-lg bg-bg-base flex items-center justify-center flex-shrink-0">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                       </svg>
                     </div>

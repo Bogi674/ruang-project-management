@@ -55,7 +55,7 @@ export function SpaceModal({ onClose, onCreated, parentId, parentName, editSpace
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose} />
+      <div className="fixed inset-0 z-50 backdrop-blur-sm flex items-center justify-center p-4" style={{ background: 'var(--scrim)' }} onClick={onClose} />
       <div
         className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[420px] bg-bg-base rounded-[14px] border border-border-default p-6"
         style={{ boxShadow: 'var(--shadow-modal)' }}

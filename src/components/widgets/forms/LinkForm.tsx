@@ -146,7 +146,7 @@ export function LinkForm({ initial, onChange }: LinkFormProps) {
                 className="h-[130px] flex items-center justify-center"
                 style={{
                   background:
-                    'repeating-linear-gradient(45deg,#f4f5f7,#f4f5f7 8px,#edf3fa 8px,#edf3fa 16px)',
+                    'repeating-linear-gradient(45deg,var(--bg-subtle),var(--bg-subtle) 8px,var(--bg-elevated) 8px,var(--bg-elevated) 16px)',
                 }}
               >
                 <span className="font-mono text-[9px] tracking-[0.08em] text-text-faint">no og:image</span>

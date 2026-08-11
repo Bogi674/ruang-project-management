@@ -23,9 +23,9 @@ interface WidgetPickerProps {
 }
 
 const WIDGET_OPTIONS: { type: WidgetType; label: string; description: string; bg: string }[] = [
-  { type: 'reminder', label: 'Reminder', description: 'Set a date and time to be notified', bg: '#edf3fa' },
-  { type: 'file', label: 'File Attachment', description: 'Attach a file from your device', bg: '#f4faf0' },
-  { type: 'link', label: 'Link / Bookmark', description: 'Save a URL with a rich preview', bg: '#edf3fa' },
+  { type: 'reminder', label: 'Reminder', description: 'Set a date and time to be notified', bg: 'var(--bg-elevated)' },
+  { type: 'file', label: 'File Attachment', description: 'Attach a file from your device', bg: 'var(--accent-green)' },
+  { type: 'link', label: 'Link / Bookmark', description: 'Save a URL with a rich preview', bg: 'var(--bg-elevated)' },
 ];
 
 export const WIDGET_ICONS: Record<WidgetType, React.ReactNode> = {
@@ -56,7 +56,7 @@ export function WidgetIcon({ type, size = 20 }: { type: WidgetType; size?: numbe
       height={size}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#738290"
+      stroke="currentColor"
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -121,7 +121,7 @@ export function WidgetPicker({ initialType = null, submitLabel = 'Add to Note', 
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={onClose} />
+      <div className="fixed inset-0 z-50 backdrop-blur-sm animate-fadeIn" style={{ background: 'var(--scrim)' }} onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 pointer-events-none">
         <div
           className={`bg-bg-base rounded-t-[16px] md:rounded-[16px] shadow-modal w-full pointer-events-auto animate-modalIn flex flex-col max-h-[92vh] md:max-h-[90vh] ${
@@ -222,7 +222,7 @@ export function WidgetPicker({ initialType = null, submitLabel = 'Add to Note', 
               </div>
 
               <div
-                className="flex justify-end gap-2 px-5 py-3 border-t border-border-light bg-[#fcfcfd] flex-shrink-0 rounded-b-[16px]"
+                className="flex justify-end gap-2 px-5 py-3 border-t border-border-light bg-bg-surface flex-shrink-0 rounded-b-[16px]"
                 style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
               >
                 <button

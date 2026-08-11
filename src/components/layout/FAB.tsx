@@ -19,8 +19,8 @@ const FAB_ITEMS: FabEntry[] = [
   {
     label: 'Note',
     noteType: 'note',
-    bg: '#dce8f6',
-    color: '#4a6090',
+    bg: 'var(--accent-blue-bg)',
+    color: 'var(--accent-blue-dark)',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -31,8 +31,8 @@ const FAB_ITEMS: FabEntry[] = [
   {
     label: 'To-do',
     noteType: 'checklist',
-    bg: '#E4F0D0',
-    color: '#4a6a40',
+    bg: 'var(--accent-green)',
+    color: 'var(--accent-green-dark)',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="9 11 12 14 22 4"/>
@@ -44,8 +44,8 @@ const FAB_ITEMS: FabEntry[] = [
     label: 'Reminder',
     noteType: 'note',
     widget: 'reminder',
-    bg: '#EDF3FA',
-    color: '#738290',
+    bg: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -57,8 +57,8 @@ const FAB_ITEMS: FabEntry[] = [
     label: 'File Upload',
     noteType: 'note',
     widget: 'file',
-    bg: '#EDF3FA',
-    color: '#738290',
+    bg: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -69,8 +69,8 @@ const FAB_ITEMS: FabEntry[] = [
     label: 'Link / Bookmark',
     noteType: 'note',
     widget: 'link',
-    bg: '#EDF3FA',
-    color: '#738290',
+    bg: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
@@ -156,7 +156,10 @@ export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
         onClick={() => !isLoading && setOpen(!open)}
         className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-fab hover:shadow-fab-hover transition-all duration-150"
         style={{
-          background: isLoading ? '#738290' : open ? '#738290' : '#A1B5D8',
+          background: isLoading || open ? 'var(--accent-slate)' : 'var(--accent-blue)',
+          // The plus has to stay legible on a Sand or Sage accent too, so the
+          // glyph colour is derived from the fill rather than pinned to white.
+          color: isLoading || open ? '#ffffff' : 'var(--accent-ink)',
           transform: open && !isLoading ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
         aria-label={isLoading ? 'Creating...' : 'Create'}
@@ -167,7 +170,7 @@ export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="white"
+            stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             className="animate-spin"
@@ -175,7 +178,7 @@ export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
           </svg>
         ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         )}

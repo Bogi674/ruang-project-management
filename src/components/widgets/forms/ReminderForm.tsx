@@ -130,7 +130,7 @@ export function ReminderForm({ initial, onChange }: ReminderFormProps) {
                   type="button"
                   aria-label={`Remove ${email}`}
                   onClick={() => setRecipients((prev) => prev.filter((e) => e !== email))}
-                  className="text-[#8ca3c8] hover:text-danger transition-colors duration-120 text-[15px] leading-none"
+                  className="text-text-muted hover:text-danger transition-colors duration-120 text-[15px] leading-none"
                 >
                   ×
                 </button>

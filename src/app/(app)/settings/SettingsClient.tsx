@@ -4,7 +4,8 @@ import { useState, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { getInitials } from '@/lib/utils';
-import { usePreferences, ACCENT_PRESETS } from '@/lib/preferences';
+import { usePreferences } from '@/lib/preferences';
+import { ACCENT_PRESETS, resolveTheme } from '@/lib/theme';
 
 interface SettingsClientProps {
   name: string;
@@ -13,9 +14,9 @@ interface SettingsClientProps {
   isGoogleUser?: boolean;
 }
 
-// "System" is gone: the dark palette only reaches the CSS custom properties,
-// not the Tailwind colors, so inheriting the OS setting produced a half-dark
-// app. Dark is an explicit choice until the two palettes are unified.
+// Dark stays an explicit choice rather than an OS inheritance: the app is a
+// writing surface, and flipping someone's page to dark at sundown because
+// their phone did is not a decision to make for them.
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -38,11 +39,16 @@ const LANDING_OPTIONS = [
   { value: 'storeroom', label: 'Storeroom' },
 ];
 
+/*
+ * Swatch previews are drawn from the same tokens the real surfaces use
+ * (--canvas-ink, --bg-base…), so every preview is already correct in dark
+ * mode instead of being a light-mode picture of a dark feature.
+ */
 const SURFACE_OPTIONS = [
   {
     value: 'clean',
     label: 'Clean',
-    sub: 'Plain white',
+    sub: 'Plain paper',
     preview: null,
   },
   {
@@ -50,7 +56,8 @@ const SURFACE_OPTIONS = [
     label: 'Dot Grid',
     sub: 'Graph paper',
     preview: {
-      backgroundImage: 'radial-gradient(circle, #c8d4e0 1px, transparent 1px)',
+      backgroundImage:
+        'radial-gradient(circle, color-mix(in srgb, var(--text-faint) 70%, transparent) 1px, transparent 1px)',
       backgroundSize: '10px 10px',
     },
   },
@@ -58,16 +65,81 @@ const SURFACE_OPTIONS = [
     value: 'warm',
     label: 'Warm Paper',
     sub: 'Cream tone',
-    preview: { backgroundColor: '#faf7f0' },
+    preview: { backgroundColor: 'var(--surface-warm)' },
   },
   {
     value: 'lined',
     label: 'Lined',
     sub: 'Notebook feel',
     preview: {
-      backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 11px, #dde4ec 11px, #dde4ec 12px)',
+      backgroundImage:
+        'repeating-linear-gradient(to bottom, transparent, transparent 11px, color-mix(in srgb, var(--text-faint) 55%, transparent) 11px, color-mix(in srgb, var(--text-faint) 55%, transparent) 12px)',
     },
   },
+];
+
+/** App-wide background graphic. Previews mirror the rules in globals.css. */
+const APP_BACKGROUND_OPTIONS = [
+  { value: 'plain', label: 'Plain', sub: 'No pattern', preview: null },
+  {
+    value: 'dots',
+    label: 'Dots',
+    sub: 'Even dot field',
+    preview: {
+      backgroundImage: 'radial-gradient(circle, var(--preview-ink) 1px, transparent 1px)',
+      backgroundSize: '9px 9px',
+    },
+  },
+  {
+    value: 'grid',
+    label: 'Grid',
+    sub: 'Squared paper',
+    preview: {
+      backgroundImage:
+        'linear-gradient(to right, var(--preview-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--preview-ink) 1px, transparent 1px)',
+      backgroundSize: '11px 11px',
+    },
+  },
+  {
+    value: 'diagonal',
+    label: 'Diagonal',
+    sub: 'Fine hatching',
+    preview: {
+      backgroundImage:
+        'repeating-linear-gradient(45deg, var(--preview-ink) 0, var(--preview-ink) 1px, transparent 1px, transparent 7px)',
+    },
+  },
+  {
+    value: 'waves',
+    label: 'Rings',
+    sub: 'Soft concentric',
+    preview: {
+      backgroundImage:
+        'repeating-radial-gradient(circle at 50% -40%, var(--preview-ink) 0, var(--preview-ink) 1px, transparent 1px, transparent 12px)',
+    },
+  },
+  {
+    value: 'glow',
+    label: 'Glow',
+    sub: 'Accent pools',
+    preview: {
+      backgroundImage:
+        'radial-gradient(70% 90% at 10% 0%, var(--canvas-glow) 0%, transparent 70%), radial-gradient(70% 90% at 95% 100%, var(--canvas-glow) 0%, transparent 70%)',
+    },
+  },
+];
+
+/**
+ * Page tint. The swatch is painted with the exact colour the canvas will take,
+ * resolved live from the theme rather than hard-coded per option.
+ */
+const TINT_OPTIONS = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'warm', label: 'Warm' },
+  { value: 'cool', label: 'Cool' },
+  { value: 'mint', label: 'Mint' },
+  { value: 'blush', label: 'Blush' },
+  { value: 'accent', label: 'Accent' },
 ];
 
 type SettingsTab = 'profile' | 'appearance';
@@ -113,14 +185,12 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
         <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint">Danger Zone</p>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
-          className="w-full h-11 rounded-[10px] text-white text-[13px] font-medium transition-colors duration-120"
-          style={{ background: '#F08050' }}
+          className="w-full h-11 rounded-[10px] bg-danger text-white text-[13px] font-medium hover:bg-danger-dark transition-colors duration-120"
         >
           Sign out
         </button>
         <button
-          className="w-full h-11 rounded-[10px] text-[13px] font-medium border transition-colors duration-120"
-          style={{ color: '#F08050', borderColor: '#f8c8a8' }}
+          className="w-full h-11 rounded-[10px] text-[13px] font-medium border border-danger-border text-danger hover:bg-danger-bg transition-colors duration-120"
         >
           Delete account
         </button>
@@ -244,7 +314,10 @@ function ProfileTab({ name, email, image, isGoogleUser }: { name: string; email:
               )}
             </div>
             {uploadingAvatar && (
-              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+              <div
+                className="absolute inset-0 rounded-full flex items-center justify-center"
+                style={{ background: 'var(--scrim-strong)' }}
+              >
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               </div>
             )}
@@ -519,6 +592,91 @@ function AppearanceTab({
                   {label}
                 </p>
                 <p className="text-[11px] text-text-muted">{sub}</p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* App background graphic */}
+      <section>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-1.5">App Background</p>
+        <p className="text-[12px] text-text-muted mb-4">
+          The graphic behind Home, Storeroom, My Room and the rest of the app. The writing
+          surface is set separately, above.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {APP_BACKGROUND_OPTIONS.map(({ value, label, sub, preview }) => {
+            const active = (preferences.app_background_preference || 'plain') === value;
+            return (
+              <button
+                key={value}
+                onClick={() => updatePreferences({ app_background_preference: value })}
+                aria-pressed={active}
+                className="p-3 rounded-[10px] border text-left transition-colors duration-120 overflow-hidden"
+                style={{
+                  background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                  borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                }}
+              >
+                <div
+                  className="w-full h-9 rounded-[6px] mb-2.5 border border-border-light"
+                  style={{ backgroundColor: 'var(--canvas-base)', ...(preview || {}) }}
+                />
+                <p
+                  className="text-[13px] mb-0.5"
+                  style={{
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-primary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </p>
+                <p className="text-[11px] text-text-muted">{sub}</p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Page tint */}
+      <section>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-1.5">Page Tint</p>
+        <p className="text-[12px] text-text-muted mb-4">
+          The colour of the canvas behind your cards. Each swatch shows the exact tone for your
+          current theme.
+        </p>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {TINT_OPTIONS.map(({ value, label }) => {
+            const active = (preferences.background_tint_preference || 'neutral') === value;
+            // Resolved through the same function the app renders with, so the
+            // swatch is the colour, not an approximation of it.
+            const swatch = resolveTheme({ ...preferences, background_tint_preference: value })
+              .vars['--canvas-base'];
+            return (
+              <button
+                key={value}
+                onClick={() => updatePreferences({ background_tint_preference: value })}
+                aria-pressed={active}
+                className="p-2 rounded-[10px] border text-center transition-colors duration-120"
+                style={{
+                  background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                  borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                }}
+              >
+                <div
+                  className="w-full h-8 rounded-[6px] mb-1.5 border border-border-light"
+                  style={{ backgroundColor: swatch }}
+                />
+                <p
+                  className="text-[11.5px]"
+                  style={{
+                    color: active ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </p>
               </button>
             );
           })}

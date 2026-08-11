@@ -9,7 +9,7 @@
  */
 
 const CONTROL =
-  'w-full text-[13.5px] text-text-primary bg-bg-base border border-border-medium rounded-btn px-3 py-2 outline-none transition-colors duration-120 placeholder:text-text-muted focus:border-accent-blue focus:ring-[3px] focus:ring-accent-blue/15';
+  'w-full text-[13.5px] text-text-primary bg-bg-base border border-border-medium rounded-btn px-3 py-2 outline-none transition-colors duration-120 placeholder:text-text-muted focus:border-accent-blue focus:ring-[3px] focus:ring-[var(--accent-wash-soft)]';
 
 export function FieldLabel({
   children,
@@ -68,7 +68,7 @@ export function SelectField({
         {children}
       </select>
       <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9aaab8" strokeWidth="2.5" strokeLinecap="round">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>

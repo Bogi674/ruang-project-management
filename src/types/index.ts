@@ -14,6 +14,8 @@ export interface User {
   density_preference: string | null;
   landing_page_preference: string | null;
   theme_preference: string | null;
+  app_background_preference: string | null;
+  background_tint_preference: string | null;
   created_at: string;
 }
 
