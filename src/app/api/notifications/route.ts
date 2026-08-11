@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, apiError } from '@/lib/api-helpers';
 import { createServerClient } from '@/lib/supabase';
+import { isUuid } from '@/lib/ownership';
 
 export async function GET() {
   const { error, userId } = await requireAuth();
@@ -31,6 +32,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (body.id) {
+    if (!isUuid(body.id)) return apiError('Invalid id', 400);
     const { data } = await db.from('notifications').update({ is_read: true }).eq('id', body.id).eq('recipient_id', userId!).select().single();
     return NextResponse.json(data);
   }

@@ -2,6 +2,14 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import { createServerClient } from './supabase';
+import { hit } from './ratelimit';
+
+if (process.env.NODE_ENV === 'production' && !process.env.NEXTAUTH_SECRET) {
+  // NextAuth v4 derives a secret from other config when this is unset, which
+  // silently produces session tokens that differ between deployments and are
+  // not tied to a value you control. Fail loudly instead.
+  throw new Error('NEXTAUTH_SECRET must be set in production');
+}
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
@@ -17,11 +25,24 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        /*
+         * Throttled per source address *and* per target address. NextAuth
+         * exposes no limiter of its own, so without this the credentials
+         * endpoint accepts unlimited password guesses. See lib/ratelimit.ts
+         * for why this is a speed bump rather than a guarantee.
+         */
+        const forwarded = (req?.headers?.['x-forwarded-for'] as string | undefined) ?? '';
+        const ip = forwarded.split(',')[0].trim() || 'unknown';
+        const email = credentials.email.trim().toLowerCase();
+        if (!hit(`login-ip:${ip}`, 10, 15 * 60 * 1000).ok) return null;
+        if (!hit(`login-acct:${email}`, 10, 15 * 60 * 1000).ok) return null;
+
         const db = createServerClient();
         const { data, error } = await db.auth.signInWithPassword({
-          email: credentials.email,
+          email,
           password: credentials.password,
         });
         if (error || !data.user) return null;
@@ -35,16 +56,34 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === 'google') {
+        // Google will hand back an unverified address for some workspace
+        // configurations; adopting an account on one would let anyone who can
+        // set that address on a Google profile claim the matching Ruang user.
+        if ((profile as { email_verified?: boolean } | undefined)?.email_verified === false) {
+          return false;
+        }
+
         const db = createServerClient();
 
         const { data: existing } = await db
           .from('users')
           .select('id')
           .eq('email', user.email!)
-          .single();
+          .maybeSingle();
 
+        /*
+         * Linking by email address alone.
+         *
+         * This is safe only while every account's address is proven. Today
+         * /api/auth/register creates accounts with email_confirm: true and
+         * never mails them, so an address can be claimed by someone who does
+         * not own it — and when the real owner later signs in with Google,
+         * this branch hands them the pre-registered account, which the
+         * squatter still has the password to. Turning on email verification at
+         * registration is what closes that; see the security review.
+         */
         if (existing) {
           user.id = existing.id;
         } else {

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, apiError } from '@/lib/api-helpers';
 import { createServerClient } from '@/lib/supabase';
+import { isUuid } from '@/lib/ownership';
+import { HEX_COLOR } from '@/lib/theme';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { error, userId } = await requireAuth();
   if (error) return error;
+  if (!isUuid(params.id)) return apiError('Not found', 404);
 
   const db = createServerClient();
   const { data, error: dbError } = await db.from('spaces').select('*').eq('id', params.id).eq('owner_id', userId!).single();
@@ -15,22 +18,49 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, userId } = await requireAuth();
   if (error) return error;
+  if (!isUuid(params.id)) return apiError('Not found', 404);
 
-  const body = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return apiError('Invalid JSON body', 400);
+  }
+
   const db = createServerClient();
   const updates: Record<string, unknown> = {};
-  if ('name' in body) updates.name = body.name;
-  if ('color' in body) updates.color = body.color;
-  if ('icon' in body) updates.icon = body.icon;
+
+  if ('name' in body) {
+    if (typeof body.name !== 'string' || !body.name.trim()) return apiError('Name required', 400);
+    updates.name = body.name.trim().slice(0, 80);
+  }
+  if ('color' in body) {
+    // Rendered into inline `background` and `border-color` on space chips, so
+    // it has to be a literal hex and nothing else.
+    if (typeof body.color !== 'string' || !HEX_COLOR.test(body.color)) {
+      return apiError('Invalid colour', 400);
+    }
+    updates.color = body.color;
+  }
+  if ('icon' in body) {
+    if (body.icon !== null && typeof body.icon !== 'string') return apiError('Invalid icon', 400);
+    updates.icon = body.icon ? String(body.icon).slice(0, 8) : null;
+  }
+
+  if (Object.keys(updates).length === 0) return apiError('Nothing to update', 400);
 
   const { data, error: dbError } = await db.from('spaces').update(updates).eq('id', params.id).eq('owner_id', userId!).select().single();
-  if (dbError) return apiError(dbError.message);
+  if (dbError) {
+    console.error('[spaces:PATCH]', dbError.message);
+    return apiError('Could not update space', 500);
+  }
   return NextResponse.json(data);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, userId } = await requireAuth();
   if (error) return error;
+  if (!isUuid(params.id)) return apiError('Not found', 404);
 
   const db = createServerClient();
   const spaceId = params.id;

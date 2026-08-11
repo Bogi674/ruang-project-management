@@ -3,14 +3,26 @@ import { requireAuth, apiError } from '@/lib/api-helpers';
 import { createServerClient } from '@/lib/supabase';
 import { sendReminderEmail } from '@/lib/resend';
 import { ReminderContent } from '@/types';
+import { isUuid } from '@/lib/ownership';
+import { rateLimit } from '@/lib/ratelimit';
 
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireAuth();
   if (error) return error;
 
-  const body = await req.json();
-  const { widget_id } = body;
-  if (!widget_id) return apiError('widget_id is required', 400);
+  // Sends outbound mail on demand; unmetered this is a way to burn the
+  // Resend quota and to flood the account owner's inbox.
+  const limited = rateLimit(req, 'reminder-send', 20, 60 * 60 * 1000);
+  if (limited) return limited;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return apiError('Invalid JSON body', 400);
+  }
+  const widget_id = body.widget_id;
+  if (!isUuid(widget_id)) return apiError('widget_id is required', 400);
 
   const db = createServerClient();
 
