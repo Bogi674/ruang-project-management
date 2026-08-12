@@ -12,6 +12,7 @@ import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table
 import { useEffect } from 'react';
 import { FormattingToolbar } from './FormattingToolbar';
 import { IndentExtension } from './IndentExtension';
+import { tiptapToChatText } from '@/lib/export';
 
 interface TipTapEditorProps {
   content?: object | null;
@@ -56,6 +57,17 @@ export function TipTapEditor({
     editable,
     editorProps: {
       attributes: { class: 'tiptap-editor' },
+      /**
+       * WhatsApp (and Telegram, Signal, Slack, any plain-text field) ignores
+       * the `text/html` half of the clipboard and pastes `text/plain`.
+       * ProseMirror builds that half with `textBetween(from, to, '\n\n')`,
+       * which drops every list marker and puts a blank line between blocks —
+       * a numbered list arrives as unnumbered, double-spaced prose.
+       *
+       * Serialising the copied slice ourselves keeps the numbers, the bullets
+       * and the emphasis, in the syntax those apps actually render.
+       */
+      clipboardTextSerializer: (slice) => tiptapToChatText(slice.content.toJSON() ?? []),
     },
     onUpdate: ({ editor }) => {
       onChange?.(editor.getJSON());

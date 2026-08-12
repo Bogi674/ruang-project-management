@@ -1,10 +1,17 @@
 /**
- * TipTap JSON → plain text / Markdown.
+ * TipTap JSON → plain text / Markdown / chat text.
  *
  * The previous inline exporter only read `doc.content[i].content[j].text`, so
  * it captured top-level paragraphs and dropped everything nested: list items,
  * task lists, blockquotes, tables and code blocks all came out blank. This
  * walks the tree properly instead.
+ *
+ * The `chat` format is what goes on the clipboard as `text/plain`. WhatsApp,
+ * Telegram, Slack and Signal all ignore `text/html` and paste that flavour, so
+ * it carries formatting the only way those apps understand it: `*bold*`,
+ * `_italic_`, `~strike~`, backtick code, `1.` / `-` list markers, `>` quotes —
+ * and single newlines between blocks, since a blank line between every item is
+ * exactly what made a tidy numbered list arrive as loose, unnumbered prose.
  */
 
 interface Mark {
@@ -20,7 +27,7 @@ interface Node {
   content?: Node[];
 }
 
-type Format = 'text' | 'markdown';
+type Format = 'text' | 'markdown' | 'chat';
 
 function escapeMarkdown(value: string): string {
   // Only the characters that would actually change block meaning mid-line.
@@ -30,19 +37,40 @@ function escapeMarkdown(value: string): string {
 function applyMarks(text: string, marks: Mark[] | undefined, format: Format): string {
   if (format === 'text' || !marks?.length) return text;
 
-  let out = text;
-  // `code` wins over emphasis — wrapping backticks in asterisks renders wrong.
-  if (marks.some((m) => m.type === 'code')) return `\`${out}\``;
+  // Marks wrap the text, so applying them to leading/trailing whitespace would
+  // put the delimiter next to a space — which chat apps then refuse to render.
+  const [, lead, core, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(text) as RegExpExecArray;
+  if (!core) return text;
 
-  if (marks.some((m) => m.type === 'bold')) out = `**${out}**`;
-  if (marks.some((m) => m.type === 'italic')) out = `*${out}*`;
-  if (marks.some((m) => m.type === 'strike')) out = `~~${out}~~`;
+  let out = core;
+  // `code` wins over emphasis — wrapping backticks in asterisks renders wrong.
+  if (marks.some((m) => m.type === 'code')) return `${lead}\`${out}\`${trail}`;
+
+  if (format === 'chat') {
+    // WhatsApp's own syntax: a single asterisk is bold, underscore is italic.
+    if (marks.some((m) => m.type === 'bold')) out = `*${out}*`;
+    if (marks.some((m) => m.type === 'italic')) out = `_${out}_`;
+    if (marks.some((m) => m.type === 'strike')) out = `~${out}~`;
+  } else {
+    if (marks.some((m) => m.type === 'bold')) out = `**${out}**`;
+    if (marks.some((m) => m.type === 'italic')) out = `*${out}*`;
+    if (marks.some((m) => m.type === 'strike')) out = `~~${out}~~`;
+  }
 
   const link = marks.find((m) => m.type === 'link');
   const href = link?.attrs?.href;
-  if (typeof href === 'string' && href) out = `[${out}](${href})`;
+  if (typeof href === 'string' && href) {
+    // Chat apps auto-link a bare URL; markdown link syntax would just be noise
+    // there, so only repeat the href when the label is not the URL itself.
+    // TipTap's autolink writes the href with a scheme the label omits, so
+    // "ruang.app" and "https://ruang.app" are the same link, not two.
+    const bare = (value: string) => value.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    out = format === 'chat'
+      ? (bare(core) === bare(href) ? href : `${out} (${href})`)
+      : `[${out}](${href})`;
+  }
 
-  return out;
+  return `${lead}${out}${trail}`;
 }
 
 /** Inline content of a block: text nodes plus hard breaks. */
@@ -85,7 +113,11 @@ function blockLines(node: Node, format: Format, depth = 0): string[] {
       const level = Number(node.attrs?.level ?? 1);
       const text = inline(node.content, format);
       if (!text) return [];
-      return [format === 'markdown' ? `${'#'.repeat(Math.min(6, Math.max(1, level)))} ${text}` : text];
+      if (format === 'markdown') return [`${'#'.repeat(Math.min(6, Math.max(1, level)))} ${text}`];
+      // Chat apps have no heading syntax; bold is how a heading reads there.
+      // Skip it when the line already carries marks that would nest badly.
+      if (format === 'chat') return [text.startsWith('*') ? text : `*${text}*`];
+      return [text];
     }
 
     case 'paragraph': {
@@ -112,7 +144,13 @@ function blockLines(node: Node, format: Format, depth = 0): string[] {
       const lines: string[] = [];
       for (const item of node.content || []) {
         const checked = item.attrs?.checked === true;
-        const box = format === 'markdown' ? (checked ? '- [x]' : '- [ ]') : (checked ? '[x]' : '[ ]');
+        const box = format === 'markdown'
+          ? (checked ? '- [x]' : '- [ ]')
+          // A bracket pair after a chat bullet renders as literal "[ ]"; the
+          // box glyphs read as checkboxes wherever the text lands.
+          : format === 'chat'
+          ? (checked ? '☑' : '☐')
+          : (checked ? '[x]' : '[ ]');
         const [first, ...rest] = listItemText(item, format, depth);
         lines.push(`${pad}${box} ${first ?? ''}`.trimEnd());
         rest.forEach((line) => lines.push(line.startsWith(' ') ? line : `${pad}  ${line}`));
@@ -122,18 +160,20 @@ function blockLines(node: Node, format: Format, depth = 0): string[] {
 
     case 'blockquote': {
       const inner = (node.content || []).flatMap((child) => blockLines(child, format, depth));
-      return inner.map((line) => (format === 'markdown' ? `> ${line}`.trimEnd() : line));
+      // WhatsApp renders "> " as a quote bar, same as Markdown.
+      return inner.map((line) => (format === 'text' ? line : `> ${line}`.trimEnd()));
     }
 
     case 'codeBlock': {
       const language = typeof node.attrs?.language === 'string' ? node.attrs.language : '';
       const body = (node.content || []).map((n) => n.text ?? '').join('');
       if (format === 'text') return body.split('\n');
-      return ['```' + language, ...body.split('\n'), '```'];
+      // Chat fences carry no language tag — it would show up as a literal line.
+      return ['```' + (format === 'chat' ? '' : language), ...body.split('\n'), '```'];
     }
 
     case 'horizontalRule':
-      return [format === 'markdown' ? '---' : '—'];
+      return [format === 'markdown' ? '---' : format === 'chat' ? '———' : '—'];
 
     case 'table': {
       const rows = (node.content || []).map((row) =>
@@ -143,6 +183,9 @@ function blockLines(node: Node, format: Format, depth = 0): string[] {
       );
       if (!rows.length) return [];
       if (format === 'text') return rows.map((cells) => cells.join('\t'));
+      // Tabs collapse to a single space in a chat bubble, so cells would run
+      // together — a visible separator is the only thing that survives.
+      if (format === 'chat') return rows.map((cells) => cells.join(' | '));
       const [header, ...body] = rows;
       return [
         `| ${header.join(' | ')} |`,
@@ -155,7 +198,9 @@ function blockLines(node: Node, format: Format, depth = 0): string[] {
       const src = typeof node.attrs?.src === 'string' ? node.attrs.src : '';
       const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : '';
       if (!src) return [];
-      return [format === 'markdown' ? `![${alt}](${src})` : alt || src];
+      if (format === 'markdown') return [`![${alt}](${src})`];
+      // A bare URL is at least clickable in a chat; alt text alone is not.
+      return [format === 'chat' ? src : alt || src];
     }
 
     default: {
@@ -177,8 +222,12 @@ function serialize(content: object | null, format: Format): string {
     chunks.push(lines);
   }
 
+  // A document's blocks are separated by a blank line in a file, but not in a
+  // chat message: there, one line per line is what the writer saw in the
+  // editor. An empty paragraph still comes through as its own blank line, so a
+  // deliberate spacer survives either way.
   return chunks
-    .join('\n\n')
+    .join(format === 'chat' ? '\n' : '\n\n')
     // Collapse the blank runs left behind by empty paragraphs.
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+$/gm, '')
@@ -198,6 +247,25 @@ export function noteToMarkdown(title: string, content: object | null): string {
   const heading = title.trim();
   if (!heading) return body ? `${body}\n` : '';
   return body ? `# ${heading}\n\n${body}\n` : `# ${heading}\n`;
+}
+
+/**
+ * TipTap JSON → the `text/plain` flavour chat apps paste.
+ *
+ * Also used for a copied selection, where the fragment handed over is an array
+ * of top-level nodes rather than a whole document.
+ */
+export function tiptapToChatText(content: object | readonly object[] | null): string {
+  const doc = Array.isArray(content) ? { type: 'doc', content } : content;
+  return serialize(doc as object | null, 'chat');
+}
+
+/** Whole note as chat text. The title leads as a bold line when there is one. */
+export function noteToChatText(title: string, content: object | null): string {
+  const body = tiptapToChatText(content);
+  const heading = title.trim();
+  if (!heading) return body;
+  return body ? `*${heading}*\n\n${body}` : `*${heading}*`;
 }
 
 /** Filesystem-safe filename stem derived from the note title. */

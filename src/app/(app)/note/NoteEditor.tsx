@@ -13,7 +13,7 @@ import { FileWidget } from '@/components/widgets/FileWidget';
 import { LinkWidget } from '@/components/widgets/LinkWidget';
 import { AutosaveIndicator } from '@/components/layout/AutosaveIndicator';
 import { DatePickerPopover } from '@/components/ui/DatePickerPopover';
-import { noteToMarkdown, noteToPlainText, exportFilename, downloadTextFile } from '@/lib/export';
+import { noteToMarkdown, noteToPlainText, noteToChatText, exportFilename, downloadTextFile } from '@/lib/export';
 import { spaceChipStyle } from '@/lib/spaceColor';
 import { scheduleSync, loadDraftFull, flushNote, cancelSync, installFlushHooks } from '@/lib/autosave';
 import { emitNotesChanged } from '@/lib/dnd';
@@ -81,6 +81,8 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
   const [pinnedDate, setPinnedDate] = useState<string>(initialNote?.pinned_date ?? '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showMobileExport, setShowMobileExport] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dateChipRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const createdAt = initialNote?.created_at || new Date().toISOString();
@@ -99,6 +101,7 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
 
   useEffect(() => () => {
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
   }, []);
 
   useEffect(() => {
@@ -256,6 +259,40 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     window.print();
   }
 
+  /**
+   * Copy the whole note in the flavour chat apps understand.
+   *
+   * Selecting inside the editor and hitting copy already produces this text
+   * (see `clipboardTextSerializer` in TipTapEditor). This is the no-selection
+   * path — the whole note in one tap, which is the only practical one on a
+   * phone. The untitled fallback is deliberately not used: "Untitled Wed, 12
+   * Aug" is noise at the top of a message.
+   */
+  async function handleCopyForChat() {
+    const text = noteToChatText(noteTitle.trim(), content);
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API needs a secure context and a permission the browser may
+      // refuse; the offscreen textarea still works everywhere it does not.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing left to try */ }
+      ta.remove();
+    }
+
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1800);
+  }
+
   async function handleDeleteNote() {
     if (!confirmDelete) { setConfirmDelete(true); return; }
     setDeleting(true);
@@ -281,6 +318,8 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
           so delete / lock / history / export would otherwise be unreachable. */}
       <div className="flex md:hidden items-center gap-1 px-4 pt-3.5 flex-shrink-0">
         <AutosaveIndicator state={autosave} />
+        {/* The menu closes on tap, so the confirmation lives out here. */}
+        {copied && <span className="text-[11.5px] text-text-muted">Copied</span>}
         <div className="flex-1" />
         <button
           onClick={handleToggleLock}
@@ -321,6 +360,11 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
                 className="absolute right-0 top-full mt-1 w-44 bg-bg-base border border-border-default rounded-[10px] py-1 z-30"
                 style={{ boxShadow: 'var(--shadow-modal)' }}
               >
+                <button
+                  onClick={() => { setShowMobileExport(false); handleCopyForChat(); }}
+                  className="w-full text-left px-3 py-2 text-[13px] text-text-secondary"
+                >Copy for chat</button>
+                <div className="h-px bg-border-light mx-2 my-1" />
                 <button
                   onClick={() => { setShowMobileExport(false); handleExportMarkdown(); }}
                   className="w-full text-left px-3 py-2 text-[13px] text-text-secondary"
@@ -429,8 +473,14 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
             </button>
-            <div className="absolute right-0 top-full mt-1 w-36 bg-bg-base border border-border-default rounded-[10px] py-1 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-120"
+            <div className="absolute right-0 top-full mt-1 w-44 bg-bg-base border border-border-default rounded-[10px] py-1 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-120"
               style={{ boxShadow: 'var(--shadow-modal)' }}>
+              {/* Pastes into WhatsApp and friends with its list markers and
+                  emphasis intact, rather than as flattened prose. */}
+              <button onClick={handleCopyForChat} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">
+                {copied ? 'Copied' : 'Copy for chat'}
+              </button>
+              <div className="h-px bg-border-light mx-2 my-1" />
               <button onClick={handleExportMarkdown} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Markdown (.md)</button>
               <button onClick={handleExportText} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Plain text (.txt)</button>
               <button onClick={handleExportPDF} className="w-full text-left px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-surface transition-colors duration-80">Print / PDF</button>
