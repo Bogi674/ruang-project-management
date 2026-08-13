@@ -148,8 +148,15 @@ notifications
 - `supabase_schema_phase2.sql` -- additive: `notes.is_locked`, `note_versions` table + RLS
 - `supabase_schema_phase3.sql` -- additive: `users.app_background_preference`,
   `users.background_tint_preference` + CHECK constraints
+- `supabase_schema_phase4.sql` -- hardening + backfill: re-asserts every appearance
+  column (phase 2 and 3 in one place), enables RLS on all eight tables, and revokes
+  `anon` / `authenticated` access to the whole `public` schema
 
-All three files are idempotent (safe to re-run).
+All four files are idempotent (safe to re-run). **Phase 4 supersedes phase 3 for
+the column list** -- running it alone is enough to bring an older database up to
+date. A missing preference column is not cosmetic: PostgREST fails a `select` as
+a whole when one column in it is unknown, which made the server read *no*
+preferences and dark mode revert to light on every load.
 
 ---
 
@@ -417,6 +424,28 @@ derived, so the default look is unchanged.
 
 `PreferencesProvider` lives in `app/providers.tsx` at the root, not in the app shell.
 
+### Why the theme sticks (three rules that must hold together)
+
+1. **The root layout's `select` is tiered.** It asks for the full column list, and on
+   error falls back to the columns that have shipped since the first schema file.
+   PostgREST fails a `select` as a whole when one column is unknown, so a database
+   missing the phase-3 columns otherwise returns *nothing* -- including
+   `theme_preference` -- and the server renders the light default.
+2. **The client never repaints defaults over a cached theme.** When the server sends
+   no preferences (login page, PWA cold start, unreadable session) the pre-paint
+   script has already restored the cached palette. `PreferencesProvider` adopts the
+   cached *values* and reconciles from `/api/users`; calling
+   `applyPreferences(defaultPreferences)` there paints light over dark **and**
+   overwrites the cache with it. That loop was the "dark mode resets on every
+   launch" bug.
+3. **There are two caches and they are not interchangeable.** `ruang_theme_cache`
+   holds resolved attributes and custom properties for the blocking pre-paint script
+   (which cannot import `theme.ts`). `ruang_prefs` holds the raw values React needs.
+   `applyPreferences()` writes both.
+
+A rejected `PATCH /api/users` now rolls the change back and surfaces `saveError` on
+the Appearance tab, rather than showing a setting that silently was never stored.
+
 Attributes on `<html>`: `data-theme`, `data-density`, `data-surface` (omitted when "clean"),
 `data-app-bg`, `data-tint`.
 
@@ -627,15 +656,22 @@ exported by `lib/theme.ts`.
 
 ---
 
-## Reminder Email Delivery (Live)
+## Email (Live)
 
-Route: `POST /api/reminders/send` (manual trigger -- not cron-based yet)
-Lib: `lib/resend.ts` exports `sendReminderEmail()`
-Env var required: `RESEND_API_KEY`
-From address: `Ruang <reminders@ruang.app>`
+Lib: `lib/resend.ts` exports `sendReminderEmail()` and `sendVerificationEmail()`
+Env vars: `RESEND_API_KEY` (required), `EMAIL_FROM` (optional, defaults to
+`Ruang <reminders@ruang.app>` -- must be a sender Resend has verified for your domain)
 
-The ReminderForm collects email recipients and send-early lead time. These are stored in the widget
-`content` jsonb. Automated cron delivery is Phase 2; manual send via the API route works now.
+**Reminders:** `POST /api/reminders/send` (manual trigger -- not cron-based yet). The
+ReminderForm collects email recipients and send-early lead time, stored in the widget
+`content` jsonb. Automated cron delivery is Phase 2.
+
+**Account verification:** `POST /api/auth/register` creates the auth user *unconfirmed*
+via `auth.admin.generateLink({ type: 'signup' })` and mails the returned `action_link`
+itself, so verification does not depend on the Supabase project's SMTP settings. If
+`RESEND_API_KEY` is unset, or the send throws, the route falls back to creating a
+pre-confirmed account and logs a warning -- a deployment that cannot mail anyone would
+otherwise refuse every signup. See finding 6 in `SECURITY_REVIEW.md`.
 
 ---
 
@@ -804,11 +840,12 @@ src/
     export.ts                  -- TipTap JSON to Markdown / plain text
     theme.ts                   -- pure theme resolver (server + client); preference enums
     preferences.ts             -- PreferencesProvider + usePreferences hook + applyPreferences()
+    keyboardInset.ts           -- useKeyboardInset(): publishes --kb-inset for the docked toolbar
     ownership.ts               -- ownsNote / ownsSpace / ownsWidget / isUuid (see rule 10)
     ratelimit.ts               -- in-memory fixed-window limiter (per-instance; see SECURITY_REVIEW.md)
     spaces.ts                  -- useSpaces hook (fetches + caches spaces tree)
     spaceColor.ts              -- spaceChipStyle() + spaceDotColor() dynamic color derivation
-    resend.ts                  -- sendReminderEmail() via Resend SDK
+    resend.ts                  -- sendReminderEmail() + sendVerificationEmail() via Resend SDK
     utils.ts                   -- formatDate, formatRelativeTime, extractTitleFromTipTap, etc.
   types/index.ts               -- all TypeScript interfaces (see below)
 public/
@@ -883,13 +920,35 @@ deleteFromR2(key: string): Promise<void>
 - PWA installable via native browser prompt (manifest.json present; next-pwa not used)
 - All primary actions reachable without scrolling to top
 - Note editor: full-screen overlay, keyboard-aware layout
-- Formatting toolbar: 44px height, overflow-x auto, no scrollbar, docked above keyboard
+- Formatting toolbar: 46px strip, overflow-x auto, no scrollbar, **docked above the keyboard**
 - Widget picker: bottom sheet only (not center modal)
 - No hover states; all interactions are tap or long-press
 - Calendar: month grid only (no unscheduled tray; access via My Storeroom)
 - Safe-area insets on bottom tab bar (iOS home indicator)
 - Tab bar height: 49px + `env(safe-area-inset-bottom)` = `--tabbar-total`
 - FAB bottom offset: `calc(var(--tabbar-total) + 16px)` = `--fab-bottom`
+
+### Docked mobile formatting toolbar
+
+On phones the toolbar is **not** in the flow at the top of the editor -- that strip
+is `hidden md:block`. `TipTapEditor` portals a second copy to `document.body` with
+class `.docked-toolbar`, fixed to the bottom of the viewport, so it stays reachable
+from whatever paragraph is being edited rather than only from the top of the note.
+
+`lib/keyboardInset.ts` publishes `--kb-inset` on `<html>` and toggles
+`data-keyboard="open"`. This is required, not a nicety: opening the keyboard on iOS
+(Safari and standalone PWA alike) does not change `window.innerHeight` and does not
+resize the layout viewport -- it only shrinks the **visual** viewport, so a
+`bottom: 0` bar sits underneath the keyboard where it cannot be tapped. The inset is
+`documentElement.clientHeight - (visualViewport.height + visualViewport.offsetTop)`,
+written straight to the DOM (never React state -- it fires every scroll frame).
+
+Two supporting pieces, both easy to break:
+- `ToolbarButton` calls `preventDefault()` on `mousedown`. Without it every tap
+  blurs the editor, the keyboard closes, and the bar drops mid-edit.
+- `.docked-toolbar-gap` on the NoteEditor root reserves `--docked-toolbar-h` plus the
+  safe-area inset, so the last line of writing is not trapped under the bar.
+  `z-40` keeps it above the note and below every modal (`z-50`).
 
 ---
 

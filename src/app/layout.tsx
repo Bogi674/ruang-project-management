@@ -43,8 +43,21 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-const PREFERENCE_COLUMNS =
-  'accent_color, typography_preference, surface_preference, density_preference, landing_page_preference, theme_preference, app_background_preference, background_tint_preference';
+/**
+ * The columns are requested in two tiers on purpose.
+ *
+ * PostgREST fails a `select` **as a whole** when any one column in it does not
+ * exist. So on a database where `supabase_schema_phase3.sql` has not been run
+ * yet, asking for `app_background_preference` does not just lose the app
+ * background — it loses `theme_preference` with it, the server renders the
+ * light default, and the user's dark mode silently reverts on every load. The
+ * core tier has shipped since the first schema file, so falling back to it
+ * keeps theme, accent and typography working while the newer columns are
+ * missing.
+ */
+const CORE_PREFERENCE_COLUMNS =
+  'accent_color, typography_preference, surface_preference, density_preference, landing_page_preference, theme_preference';
+const PREFERENCE_COLUMNS = `${CORE_PREFERENCE_COLUMNS}, app_background_preference, background_tint_preference`;
 
 /**
  * Loads the signed-in user's appearance settings.
@@ -60,13 +73,27 @@ async function loadPreferences(): Promise<Partial<UserPreferences> | null> {
     if (!userId) return null;
 
     const db = createServerClient();
-    const { data } = await db
+    const { data, error } = await db
       .from('users')
       .select(PREFERENCE_COLUMNS)
       .eq('id', userId)
       .single();
 
-    return (data as Partial<UserPreferences>) ?? null;
+    if (!error) return (data as Partial<UserPreferences>) ?? null;
+
+    console.error('[layout:preferences] full select failed, retrying core columns:', error.message);
+
+    const { data: core, error: coreError } = await db
+      .from('users')
+      .select(CORE_PREFERENCE_COLUMNS)
+      .eq('id', userId)
+      .single();
+
+    if (coreError) {
+      console.error('[layout:preferences] core select failed:', coreError.message);
+      return null;
+    }
+    return (core as Partial<UserPreferences>) ?? null;
   } catch {
     // Appearance must never be the reason a page fails to render.
     return null;

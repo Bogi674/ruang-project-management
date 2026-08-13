@@ -16,6 +16,11 @@ function ToolbarButton({ onClick, active, disabled, title, children }: ToolbarBu
   return (
     <button
       type="button"
+      // Swallowing the focus shift keeps the selection — and, on a phone, the
+      // keyboard — exactly where it was. Without this the docked toolbar
+      // dismisses the keyboard on every tap and the bar drops to the bottom of
+      // the screen mid-edit.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       disabled={disabled}
       title={title}

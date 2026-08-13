@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -12,6 +12,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [justVerified, setJustVerified] = useState(false);
+
+  // Read straight from the URL rather than through useSearchParams: this page
+  // is prerendered, and that hook would drag the whole route behind a Suspense
+  // boundary for one optional flag.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('verified') === '1') {
+      setJustVerified(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,8 +30,17 @@ export default function LoginPage() {
     setError('');
     const result = await signIn('credentials', { email, password, redirect: false });
     setLoading(false);
-    if (result?.ok) router.push('/home');
-    else setError('Invalid email or password.');
+    if (result?.ok) {
+      router.push('/home');
+      return;
+    }
+    /*
+     * Supabase refuses an account whose address has never been confirmed, and
+     * it arrives here indistinguishable from a wrong password — the provider
+     * gives no reason back, and inventing one per case would tell an attacker
+     * which addresses are registered. One message, both possibilities named.
+     */
+    setError('Invalid email or password — or an email you haven’t confirmed yet.');
   }
 
   async function handleGoogle() {
@@ -35,6 +55,12 @@ export default function LoginPage() {
           <Logo variant="text" height={36} href="/login" />
           <p className="text-[13px] text-text-muted text-center">Your calm, focused personal workspace</p>
         </div>
+
+        {justVerified && (
+          <p className="text-[12.5px] text-accent-green-dark bg-accent-green border border-accent-green-mid rounded-[10px] px-3 py-2 text-center">
+            Email confirmed. Sign in to open your Ruang.
+          </p>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">

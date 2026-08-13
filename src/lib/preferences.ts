@@ -17,12 +17,47 @@ export {
 } from './theme';
 
 /**
- * Mirrors the resolved theme into localStorage so a logged-out or
- * pre-hydration render (login page, PWA cold start) can paint the right
- * palette before the session is known. The root layout reads this in a tiny
- * blocking script; the server value always wins when there is one.
+ * Two caches, and they are not interchangeable.
+ *
+ * THEME_CACHE_KEY holds the *resolved* output — the `data-*` attributes and CSS
+ * custom properties. The blocking script in the root layout replays it before
+ * first paint, and it cannot import this module to resolve anything itself.
+ *
+ * PREFS_CACHE_KEY holds the raw preference values. React needs these: without
+ * them a render that arrives with no server-side preferences (the login page, a
+ * PWA cold start, a request where the session could not be read) falls back to
+ * `defaultPreferences` and then repaints *light* over the dark theme the
+ * pre-paint script had just restored — and overwrites the theme cache with it.
+ * That is the loop that made dark mode look like it reverted on every launch.
  */
 const THEME_CACHE_KEY = 'ruang_theme_cache';
+const PREFS_CACHE_KEY = 'ruang_prefs';
+
+const PREFERENCE_KEYS = Object.keys(defaultPreferences) as (keyof UserPreferences)[];
+
+/** Narrows an arbitrary object to the preference columns we recognise. */
+function pickPreferences(source: Record<string, unknown>): Partial<UserPreferences> {
+  const out: Partial<UserPreferences> = {};
+  for (const key of PREFERENCE_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' || value === null) {
+      out[key] = value as never;
+    }
+  }
+  return out;
+}
+
+function readCachedPreferences(): Partial<UserPreferences> | null {
+  try {
+    const raw = localStorage.getItem(PREFS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return pickPreferences(parsed as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Writes the resolved theme onto <html>. The server does exactly the same
@@ -49,10 +84,8 @@ export function applyPreferences(prefs: Partial<UserPreferences>) {
   if (meta) meta.setAttribute('content', browserThemeColor(resolved));
 
   try {
-    localStorage.setItem(
-      THEME_CACHE_KEY,
-      JSON.stringify({ attrs, vars: resolved.vars })
-    );
+    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify({ attrs, vars: resolved.vars }));
+    localStorage.setItem(PREFS_CACHE_KEY, JSON.stringify(pickPreferences(prefs as Record<string, unknown>)));
   } catch {
     /* private mode / quota — the server render still covers the common case */
   }
@@ -61,11 +94,14 @@ export function applyPreferences(prefs: Partial<UserPreferences>) {
 interface PreferencesContextType {
   preferences: UserPreferences;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
+  /** Set when the last save was rejected, so settings can say so out loud. */
+  saveError: string | null;
 }
 
 const PreferencesContext = createContext<PreferencesContextType>({
   preferences: defaultPreferences,
   updatePreferences: async () => {},
+  saveError: null,
 });
 
 export function PreferencesProvider({
@@ -75,17 +111,12 @@ export function PreferencesProvider({
   children: React.ReactNode;
   initialPreferences?: Partial<UserPreferences> | null;
 }) {
+  const hasServerPreferences = Boolean(initialPreferences);
   const [preferences, setPreferences] = useState<UserPreferences>({
     ...defaultPreferences,
     ...(initialPreferences || {}),
   });
-
-  // The server already painted this exact state onto <html>; re-applying on
-  // mount only refreshes the localStorage cache for the next cold start.
-  useEffect(() => {
-    applyPreferences(preferences);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // A ref shadows the state so the callback can be identity-stable while still
   // merging onto the newest value — settings are tapped in quick bursts and a
@@ -93,26 +124,81 @@ export function PreferencesProvider({
   const prefsRef = useRef(preferences);
   prefsRef.current = preferences;
 
+  const adopt = useCallback((next: Partial<UserPreferences>) => {
+    const merged = { ...defaultPreferences, ...next };
+    prefsRef.current = merged;
+    setPreferences(merged);
+    applyPreferences(merged);
+  }, []);
+
+  useEffect(() => {
+    // The server already painted this exact state onto <html>; re-applying on
+    // mount only refreshes the caches for the next cold start.
+    if (hasServerPreferences) {
+      applyPreferences(prefsRef.current);
+      return;
+    }
+
+    /*
+     * No server-side answer. The pre-paint script has already restored the
+     * cached palette, so the one thing this must not do is repaint defaults
+     * over it. Adopt the cached values, then ask the API for the real ones —
+     * on /login that 401s and the cache stands, which is the intent.
+     */
+    const cached = readCachedPreferences();
+    if (cached) adopt(cached);
+
+    let cancelled = false;
+    fetch('/api/users')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user: Record<string, unknown> | null) => {
+        if (cancelled || !user) return;
+        adopt(pickPreferences(user));
+      })
+      .catch(() => {
+        /* Offline: the cached theme is the best answer available. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {
-    const next = { ...prefsRef.current, ...updates };
+    const previous = prefsRef.current;
+    const next = { ...previous, ...updates };
     prefsRef.current = next;
     setPreferences(next);
     applyPreferences(next);
+    setSaveError(null);
 
     try {
-      await fetch('/api/users', {
+      const res = await fetch('/api/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch {
-      /* The local state stands; the next successful save reconciles it. */
+      /*
+       * Roll back rather than leave the screen showing something the database
+       * never accepted. A setting that appears to apply and then quietly
+       * reverts on the next load is the harder bug to diagnose of the two.
+       * Skipped if a newer change has already landed on top of this one.
+       */
+      if (prefsRef.current === next) {
+        prefsRef.current = previous;
+        setPreferences(previous);
+        applyPreferences(previous);
+      }
+      setSaveError("Couldn't save that setting — check your connection and try again.");
     }
   }, []);
 
   return React.createElement(
     PreferencesContext.Provider,
-    { value: { preferences, updatePreferences } },
+    { value: { preferences, updatePreferences, saveError } },
     children
   );
 }

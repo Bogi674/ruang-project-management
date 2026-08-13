@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { rateLimit } from '@/lib/ratelimit';
+import { sendVerificationEmail } from '@/lib/resend';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * Whether this deployment can prove an address belongs to whoever typed it.
+ *
+ * With no mail transport there is nothing to send, and refusing to register
+ * anyone would be worse than the risk — so the route falls back to the old
+ * confirmed-on-creation behaviour and says so in the log. Set RESEND_API_KEY
+ * (and EMAIL_FROM to a verified sender) to turn verification on.
+ */
+function canVerifyEmail(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
 export async function POST(req: NextRequest) {
-  // Registration creates an auth user and sends nothing to verify it, so an
-  // unthrottled endpoint is both a spam vector and a way to enumerate which
-  // addresses already have accounts.
+  // An unthrottled registration endpoint is both a spam vector and a way to
+  // enumerate which addresses already have accounts.
   const limited = rateLimit(req, 'register', 5, 15 * 60 * 1000);
   if (limited) return limited;
 
@@ -39,6 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   const db = createServerClient();
+  const verify = canVerifyEmail();
 
   const { data: existing } = await db
     .from('users')
@@ -47,7 +60,9 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   /*
-   * Deliberately identical to the success response.
+   * Deliberately identical to the success response, `verify` included — that
+   * flag is decided by server configuration, never by whether this particular
+   * address is taken.
    *
    * Returning "an account with this email already exists" turned this route
    * into an account-existence oracle: anyone could test an address list
@@ -56,23 +71,68 @@ export async function POST(req: NextRequest) {
    * they are in.
    */
   if (existing) {
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json({ ok: true, verify }, { status: 201 });
   }
 
-  const { data, error } = await db.auth.admin.createUser({
+  if (!verify) {
+    console.warn(
+      '[register] RESEND_API_KEY is not set — creating a pre-confirmed account without verifying the address.'
+    );
+    const { data, error } = await db.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name, avatar_url: null },
+    });
+    if (error || !data.user) {
+      console.error('[register]', error?.message);
+      return NextResponse.json({ error: 'Registration failed.' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, verify: false }, { status: 201 });
+  }
+
+  /*
+   * generateLink creates the auth user *unconfirmed* and hands back the
+   * confirmation URL without mailing it, which is what lets Ruang send it
+   * through its own transport rather than depending on the Supabase project's
+   * SMTP settings.
+   *
+   * Unconfirmed matters beyond the obvious: `signInWithPassword` refuses an
+   * unconfirmed account, so registering an address you do not own now buys
+   * nothing. That is the hole this closes — Google sign-in in lib/auth.ts
+   * adopts an existing row by email address, so a squatter who could log in
+   * with their own password was one Google sign-in away from sharing the real
+   * owner's workspace.
+   */
+  const origin = process.env.NEXTAUTH_URL || req.nextUrl.origin;
+  const { data, error } = await db.auth.admin.generateLink({
+    type: 'signup',
     email,
     password,
-    // NOTE: this marks the address confirmed without ever mailing it. See the
-    // security review — email verification is the outstanding item here, and
-    // it is what makes the Google sign-in path in lib/auth.ts safe.
-    email_confirm: true,
-    user_metadata: { name, avatar_url: null },
+    options: {
+      data: { name, avatar_url: null },
+      redirectTo: `${origin}/login?verified=1`,
+    },
   });
 
-  if (error || !data.user) {
-    console.error('[register]', error?.message);
+  const link = data?.properties?.action_link;
+  if (error || !data?.user || !link) {
+    console.error('[register:generateLink]', error?.message);
     return NextResponse.json({ error: 'Registration failed.' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  try {
+    await sendVerificationEmail({ to: email, name, link });
+  } catch (mailError) {
+    /*
+     * The account now exists but nothing can reach it — leaving it that way
+     * would lock the person out of an address they do own. Confirm it so
+     * signup still completes, and make the misconfiguration loud in the log.
+     */
+    console.error('[register:sendVerificationEmail]', (mailError as Error)?.message);
+    await db.auth.admin.updateUserById(data.user.id, { email_confirm: true });
+    return NextResponse.json({ ok: true, verify: false }, { status: 201 });
+  }
+
+  return NextResponse.json({ ok: true, verify: true }, { status: 201 });
 }
