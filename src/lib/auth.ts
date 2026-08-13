@@ -76,13 +76,16 @@ export const authOptions: NextAuthOptions = {
         /*
          * Linking by email address alone.
          *
-         * This is safe only while every account's address is proven. Today
-         * /api/auth/register creates accounts with email_confirm: true and
-         * never mails them, so an address can be claimed by someone who does
-         * not own it — and when the real owner later signs in with Google,
-         * this branch hands them the pre-registered account, which the
-         * squatter still has the password to. Turning on email verification at
-         * registration is what closes that; see the security review.
+         * This is safe only while every account's address is proven, which is
+         * why /api/auth/register now creates accounts *unconfirmed* and mails
+         * a confirmation link. An address squatted by someone who does not own
+         * it cannot be signed into with a password until that link is
+         * followed, so adopting the row here hands the real owner an account
+         * nobody else can reach.
+         *
+         * Residual risk, unchanged and standard for this pattern: if the real
+         * owner follows a confirmation link from a registration they did not
+         * start, the squatter's password becomes live. See SECURITY_REVIEW.md.
          */
         if (existing) {
           user.id = existing.id;

@@ -313,7 +313,9 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     // Mobile: the app shell already offsets the 56px header and the bottom tab
     // bar, so the editor fills the remaining space rather than assuming the
     // desktop 52px navbar height (which pushed the title under the header).
-    <div className="note-paper flex flex-col min-h-[60vh] md:h-[calc(100vh-52px)] md:min-h-0">
+    // `docked-toolbar-gap` reserves the height of the formatting bar that is
+    // fixed over the bottom of the screen on phones.
+    <div className="note-paper flex flex-col min-h-[60vh] md:h-[calc(100vh-52px)] md:min-h-0 docked-toolbar-gap">
       {/* Mobile action bar — the desktop action row is hidden on small screens,
           so delete / lock / history / export would otherwise be unreachable. */}
       <div className="flex md:hidden items-center gap-1 px-4 pt-3.5 flex-shrink-0">

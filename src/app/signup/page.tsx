@@ -14,6 +14,11 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Set when the server mailed a confirmation link instead of opening a
+  // session. Deliberately shown for an address that already has an account
+  // too — the register route answers identically either way, and this screen
+  // has to keep that promise or it becomes the enumeration oracle instead.
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   function validatePassword(pw: string): string | null {
     if (pw.length < 8) return 'Password must be at least 8 characters.';
@@ -45,6 +50,12 @@ export default function SignupPage() {
         return;
       }
 
+      if (data.verify) {
+        setAwaitingConfirmation(true);
+        setLoading(false);
+        return;
+      }
+
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.ok) {
         router.push('/home');
@@ -71,6 +82,35 @@ export default function SignupPage() {
 
   const passwordValid = password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  if (awaitingConfirmation) {
+    return (
+      <div className="min-h-screen bg-bg-page flex items-center justify-center p-8">
+        <div className="w-full max-w-[364px] flex flex-col gap-7 items-center">
+          <Logo variant="text" height={36} href="/signup" />
+          <div className="flex flex-col gap-3 text-center">
+            <h1 className="font-serif text-[24px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>
+              Check your email
+            </h1>
+            <p className="text-[13.5px] leading-[1.7] text-text-secondary">
+              We sent a confirmation link to <span className="text-text-primary">{email}</span>.
+              Follow it and you&apos;re in.
+            </p>
+            <p className="text-[12px] leading-[1.7] text-text-muted">
+              Nothing yet? Check spam. If this address already has a Ruang, no new
+              account was created — sign in with your existing password instead.
+            </p>
+          </div>
+          <Link
+            href="/login"
+            className="h-12 w-full rounded-[10px] bg-accent-slate text-white text-[14px] font-medium flex items-center justify-center no-underline"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg-page flex items-center justify-center p-8">

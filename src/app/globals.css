@@ -113,6 +113,8 @@
     --shadow-fab: 0 4px 16px rgba(161,181,216,.4);
     --shadow-fab-hover: 0 8px 28px rgba(161,181,216,.5);
     --shadow-fab-menu: 0 8px 32px rgba(44,56,72,.13), 0 2px 6px rgba(44,56,72,.06);
+    /* Upward lift for the docked mobile toolbar, which sits over the writing. */
+    --shadow-docked: 0 -2px 12px rgba(44,56,72,.07);
   }
 
   /* Desktop has no tab bar, so the FAB sits on the plain 28px inset. */
@@ -227,6 +229,7 @@
   --shadow-card-hover: 0 8px 24px rgba(0,0,0,.48);
   --shadow-modal:      0 18px 60px rgba(0,0,0,.62), 0 2px 10px rgba(0,0,0,.42);
   --shadow-fab-menu:   0 10px 34px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  --shadow-docked:     0 -2px 14px rgba(0,0,0,.5);
 
   --scrim:        rgba(0,0,0,0.55);
   --scrim-strong: rgba(0,0,0,0.7);
@@ -535,6 +538,50 @@
   overscroll-behavior-x: contain;
 }
 .toolbar-scroll::-webkit-scrollbar { display: none; }
+
+/*
+ * Docked mobile formatting toolbar.
+ *
+ * Fixed to the bottom of the viewport and lifted by --kb-inset, which
+ * lib/keyboardInset.ts sets to the height of the on-screen keyboard (see that
+ * file for why the visual viewport has to be measured rather than trusting
+ * `bottom: 0`). With the keyboard closed the inset is 0 and the bar rests on
+ * the home-indicator inset instead; with it open that padding would read as a
+ * gap between the bar and the keys, so it is dropped.
+ *
+ * z-40 matches the mobile header: above the note, below every modal (z-50), so
+ * the widget picker and version history still cover it.
+ */
+.docked-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--kb-inset, 0px);
+  z-index: 40;
+  background: var(--bg-base);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: var(--shadow-docked);
+}
+
+:root[data-keyboard="open"] .docked-toolbar {
+  padding-bottom: 0;
+}
+
+/* Height of the docked bar (46px strip + its 1px top border), so the note can
+   reserve room for it and the last line of writing is never trapped
+   underneath. */
+:root {
+  --docked-toolbar-h: 47px;
+}
+
+.docked-toolbar-gap {
+  padding-bottom: calc(var(--docked-toolbar-h) + env(safe-area-inset-bottom) + 8px);
+}
+
+/* Desktop keeps the in-flow strip, so there is nothing to clear. */
+@media (min-width: 768px) {
+  .docked-toolbar-gap { padding-bottom: 0; }
+}
 
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

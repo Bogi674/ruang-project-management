@@ -106,7 +106,7 @@ ANDed separately so this could not read another user's notes, but it could
 provoke errors and reference unintended columns. Replaced with a parameterised
 `.ilike()`, with LIKE metacharacters escaped so a typed `%` stays literal.
 
-## 6. Account takeover via unverified registration — **OUTSTANDING (highest priority)**
+## 6. Account takeover via unverified registration — **fixed (2026-08-13)**
 
 `POST /api/auth/register` creates the account with `email_confirm: true` and
 never sends a verification mail. Anyone can register `victim@example.com`.
@@ -120,18 +120,37 @@ address** and adopts the existing row. So:
 3. The callback finds the pre-registered row and logs the victim into it.
 4. The attacker still knows the password — and now has the victim's notes.
 
-**Partially mitigated in this change:** registration is rate limited (5 per 15
-min per IP); the account-exists response is now identical to the success
-response, so the endpoint is no longer an email-enumeration oracle; and Google
-sign-in is refused when the provider reports `email_verified: false`.
+**Mitigated in the first pass:** registration is rate limited (5 per 15 min per
+IP); the account-exists response is identical to the success response, so the
+endpoint is not an email-enumeration oracle; and Google sign-in is refused when
+the provider reports `email_verified: false`.
 
-**The actual fix is still needed.** Verify the address at registration —
-either switch the route to `db.auth.signUp()` (Supabase mails the confirmation
-link) and add a "check your email" state to `/signup`, or keep
-`admin.createUser` with `email_confirm: false` and call
-`auth.admin.generateLink({ type: 'signup' })` yourself. This changes the signup
-UX, which is why it is not done here. Until it ships, treat Google-to-password
-account linking as untrusted.
+**Closed now.** `POST /api/auth/register` calls
+`auth.admin.generateLink({ type: 'signup' })`, which creates the auth user
+**unconfirmed** and returns the confirmation URL without sending it; Ruang
+mails that link itself through Resend (`sendVerificationEmail` in
+`lib/resend.ts`), so verification does not depend on the Supabase project's
+SMTP configuration. `/signup` shows a "check your email" state instead of
+opening a session — and shows it for an address that already has an account
+too, which is what keeps the anti-enumeration property intact.
+
+`signInWithPassword` refuses an unconfirmed account, so step 1 of the attack no
+longer buys anything: the squatter cannot sign in, and when the real owner
+arrives through Google the row they adopt is one nobody else can reach.
+
+Two things to know about the shape of the fix:
+
+- **Fallback.** With no `RESEND_API_KEY`, and if the send itself throws, the
+  route falls back to creating (or confirming) the account the old way and logs
+  a warning. A deployment that cannot mail anyone would otherwise refuse every
+  signup. If you want verification actually enforced, `RESEND_API_KEY` must be
+  set and `EMAIL_FROM` must be a sender Resend has verified for your domain —
+  the default `reminders@ruang.app` fails closed into that fallback if it is
+  not.
+- **Residual risk (accepted, standard).** If the real owner follows a
+  confirmation link from a registration they did not start, the squatter's
+  password becomes live. Nothing short of blocking pre-registration of an
+  address entirely removes that.
 
 ## 7. No rate limiting on authentication — **partially fixed**
 
@@ -261,19 +280,55 @@ existing R2 upload flow and store the object key, the same as every other file.
   notes, so a space's badge showed the wrong number.
 - Malformed JSON bodies threw instead of returning 400.
 
+## 17. The public PostgREST surface was left open — **fixed (2026-08-13)**
+
+Separate from the service-role question above: a Supabase project exposes every
+table in the `public` schema over PostgREST to the `anon` and `authenticated`
+Postgres roles, which are what the publishable keys map to. Anyone with the
+project URL can call that API. RLS policies were the only thing standing in
+front of it, and a policy is one `using (true)` away from not being.
+
+Ruang does not use those roles at all — there is no browser Supabase client in
+the codebase, and every query runs service-role from a server route. So the
+grants are pure attack surface. `supabase_schema_phase4.sql` revokes all table,
+sequence and function privileges from both roles, revokes `usage` on the schema
+itself, and sets default privileges so a future table arrives closed. The same
+file asserts RLS is enabled on all eight application tables, so the policies are
+live the day the app moves off the service role.
+
+Reversible: if a browser client is ever added, grant back the specific tables it
+needs and let the existing policies do their work.
+
+### What hardening cannot do
+
+Being able to read your own users' notes and email addresses from the Supabase
+dashboard is not a vulnerability to fix — it is what owning the project means.
+The service-role key and the dashboard are administrator access by definition,
+and any hosted database works this way. Two clarifications worth having:
+
+- **Passwords are not visible, to you or to anyone.** They live in
+  `auth.users.encrypted_password` as bcrypt hashes that Supabase manages. No
+  application query touches that table, and a hash is not reversible into the
+  password.
+- **The real controls are operational.** Treat `SUPABASE_SERVICE_ROLE_KEY` as
+  the crown jewels: it is in Vercel's environment, it must never be prefixed
+  `NEXT_PUBLIC_`, and it should be rotated if it is ever pasted anywhere.
+  Restrict who can log into the Supabase project, and turn on point-in-time
+  recovery before real users arrive. If you want *technical* inability to read
+  note bodies, that is end-to-end encryption — a different product, since it
+  costs server-side search, link previews and email reminders.
+
 ---
 
 ## What to do next, in order
 
-1. **Verify email addresses at registration** (finding 6). This is the only
-   finding that leads to full account takeover, and the mitigations shipped
-   here narrow it without closing it.
-2. **Move rate limiting to shared storage** (finding 7). Small change, and it
+1. **Move rate limiting to shared storage** (finding 7). Small change, and it
    turns a speed bump into an actual control.
-3. **Plan the Next.js upgrade to 15.5.x** (finding 14). Mechanical but
+2. **Plan the Next.js upgrade to 15.5.x** (finding 14). Mechanical but
    wide-reaching; give it its own change.
-4. **Revoke sessions on password change** (finding 8).
-5. **Migrate user-scoped queries off the service role so RLS is live** (the
+3. **Revoke sessions on password change** (finding 8).
+4. **Migrate user-scoped queries off the service role so RLS is live** (the
    structural issue). The largest item and the one that stops this class of bug
-   recurring.
-6. **Move avatars to R2** (finding 15).
+   recurring. Phase 4 has already switched enforcement on, so the policies take
+   effect the moment the queries move.
+5. **Move avatars to R2** (finding 15).
