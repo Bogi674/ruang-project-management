@@ -199,7 +199,7 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
         </div>
 
         {/* Scrollable middle */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto overscroll-none px-4 py-4 space-y-5">
           <Link
             href="/storeroom"
             className={`flex items-center gap-3 py-2.5 text-14 no-underline ${
