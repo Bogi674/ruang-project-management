@@ -401,7 +401,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
         </div>
 
         {/* Scrollable time grid */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-none">
           <div className="relative" style={{ height: `${24 * 48}px` }}>
             {HOURS.map(h => (
               <div key={h} className="absolute w-full flex" style={{ top: h * 48, height: 48 }}>
@@ -566,7 +566,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
 
         {/* Calendar body */}
         {view === 'month' ? (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto overscroll-none">
             <div className="grid grid-cols-7 border-b border-border-default bg-bg-base sticky top-0 z-10">
               {DAY_NAMES.map(d => (
                 <div key={d} className="text-center py-2 text-[9.5px] font-mono uppercase tracking-[0.1em] text-text-faint border-r border-border-light last:border-r-0">
