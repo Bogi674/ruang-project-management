@@ -363,7 +363,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
           paddingLeft: 'var(--safe-left)',
         }}
       >
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 space-y-5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none py-4 px-2 space-y-5">
           {/* Storeroom — also a drop target for un-assigning a note */}
           <div>
             <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint px-3 mb-1.5">Pinned</p>

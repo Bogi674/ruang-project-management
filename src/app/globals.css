@@ -165,6 +165,25 @@
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    /*
+     * Kill the rubber-band overscroll on the document.
+     *
+     * Past the last line of a note the whole page used to lift a few dozen
+     * pixels and expose a strip of bare canvas under the content (and the
+     * mirror of it above the header when bouncing at the top). The strip is
+     * not a layout hole — it is the browser's elastic scroll, which drags the
+     * scrolled content away from the viewport edge while the fixed navbar,
+     * tab bar and FAB stay put, so the seam reads as a gap in the UI.
+     *
+     * `none` (not `contain`) also stops the pull-to-refresh gesture, which an
+     * installed PWA should not have. Inner scrollers that legitimately bounce
+     * — the horizontal toolbar strip — set their own value.
+     */
+    overscroll-behavior: none;
+    /* Belt and braces for the bounce: the viewport paints the same colour the
+       canvas does, so any residual overscroll on a platform that ignores the
+       property above shows more canvas rather than a dark seam. */
+    background-color: var(--canvas-base);
   }
 
   body {
@@ -175,6 +194,7 @@
     background: var(--canvas-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
   }
 }
 
@@ -618,17 +638,19 @@
 /* Safe area */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
-/* Logo theme tokens */
-:root {
-  --logo-stroke: #1a1a1a;
-  --logo-fill: #d4d4d4;
-  --logo-text: #1a1a1a;
-}
-:root[data-theme="dark"] {
-  --logo-stroke: #ffffff;
-  --logo-fill: rgba(255,255,255,0.18);
-  --logo-text: #ffffff;
-}
+/* ── Logo ──
+ * The mark is a raster asset in two cuts: dark ink for the light theme and a
+ * reversed (white) cut for the dark one, where the dark ink otherwise reads as
+ * a smudge on the canvas. Both are in the DOM and the theme picks one here —
+ * see components/layout/Logo.tsx for why the choice is CSS and not JS.
+ *
+ * (These replace the --logo-stroke / --logo-fill / --logo-text variables, which
+ * were left behind by an earlier inline-SVG logo and referenced by nothing.)
+ */
+.logo-img { display: block; }
+.logo-img-dark { display: none; }
+:root[data-theme="dark"] .logo-img-light { display: none; }
+:root[data-theme="dark"] .logo-img-dark { display: block; }
 
 /* ── Tables (TipTap) ── */
 .tiptap-editor .ProseMirror table {

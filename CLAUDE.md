@@ -481,6 +481,20 @@ at `z-index: -1` inside a stacking context, so no child needs a z-index and the 
 bar and FAB are untouched. `.note-paper` always paints `--bg-base`: the background customisation
 is for dashboards, never for the surface you write on.
 
+`Logo.tsx` renders **both** logo PNGs -- the dark-ink cut and the `_reversed` (white) cut -- and
+`globals.css` hides one with `:root[data-theme="dark"]`. Do not pick the `src` in React: the theme
+attribute is on `<html>` before React runs, so a JS choice flashes the ink logo on every dark load
+and cannot match on the server.
+
+### Overscroll
+
+`html`/`body` set `overscroll-behavior: none`, and every long-lived inner scroller (the TipTap
+body, sidebar, mobile drawer, calendar grid) carries `overscroll-none`. The elastic bounce drags
+scrolled content away from the viewport edge while the fixed navbar, tab bar and FAB stay put, so
+past the end of a note it read as a strip of bare canvas torn open at the bottom of the UI (and
+the mirror of it at the top). `none` rather than `contain` -- `contain` only stops chaining and
+leaves the bounce. It also removes pull-to-refresh, which an installed PWA should not have.
+
 ---
 
 ## Screen Inventory and Routes

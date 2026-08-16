@@ -132,7 +132,11 @@ export function TipTapEditor({
       {toolbarPosition === 'top' && <div className="hidden md:block">{toolbar}</div>}
       {/* Breathing room between the toolbar and the first line of prose — the
           text used to start flush against the toolbar border. */}
-      <div className={`flex-1 overflow-y-auto ${toolbarPosition === 'top' ? 'md:pt-6' : 'pb-5'}`}>
+      {/* overscroll-none, not the default: this is the app's own scroller, and
+          at either end of the writing the elastic bounce dragged the whole
+          column away from the toolbar / window edge and showed a strip of bare
+          canvas through the seam. Nothing sits behind it worth chaining to. */}
+      <div className={`flex-1 overflow-y-auto overscroll-none ${toolbarPosition === 'top' ? 'md:pt-6' : 'pb-5'}`}>
         <EditorContent editor={editor} className="tiptap-editor min-h-full" />
       </div>
       {toolbarPosition === 'bottom' && <div className="hidden md:block">{toolbar}</div>}
