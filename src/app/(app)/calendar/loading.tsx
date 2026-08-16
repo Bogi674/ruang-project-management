@@ -1,6 +1,6 @@
 export default function CalendarLoading() {
   return (
-    <div className="flex h-[calc(100vh-52px)] animate-pulse">
+    <div className="flex h-[var(--app-content-h)] animate-pulse">
       <div className="flex-1 flex flex-col p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="w-8 h-8 bg-border-light rounded-lg" />

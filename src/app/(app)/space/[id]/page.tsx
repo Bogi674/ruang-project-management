@@ -77,7 +77,10 @@ export default async function SpacePage({
     // position: relative scopes the absolutely-positioned background layers.
     // --space-color is injected here so any descendant CSS rule can reference it.
     <div
-      className="relative min-h-screen"
+      // The shell already reserves the navbar, so a full `100vh` here would
+      // overshoot the content area by exactly the navbar's height and give the
+      // page a strip of empty scroll. --app-content-h is what is actually left.
+      className="relative min-h-[var(--app-content-h)]"
       style={{ '--space-color': spaceColor } as React.CSSProperties}
     >
       {/* Procedural SVG background — unique and permanent per space */}

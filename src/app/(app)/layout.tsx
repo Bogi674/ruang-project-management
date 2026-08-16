@@ -56,7 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen app-canvas flex items-center justify-center">
+      <div className="min-h-[100dvh] app-canvas flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -74,7 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         sits on. Cards and the writing column paint their own --bg-base on top
         of it, so the background customisation never bleeds into content.
       */}
-      <div className="min-h-screen app-canvas">
+      <div className="min-h-[100dvh] app-canvas">
         {/* Desktop */}
         <div className="hidden md:block">
           <TopNavbar
@@ -85,9 +85,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onShowShortcuts={() => setShowShortcuts(true)}
           />
           {!focusMode && <Sidebar width={sidebarWidth} onWidthChange={handleSidebarWidth} />}
+          {/*
+            The navbar offset is PADDING, never margin.
+
+            As a margin it collapsed straight out through `.app-canvas` and
+            `<body>` — nothing in that chain establishes a block formatting
+            context — so it landed on the root element instead of pushing the
+            content down inside the canvas. The document ended up 52px taller
+            than the viewport, which gave every page a phantom 52px of scroll
+            with nothing in it. Scrolling to the end slid the top of the page
+            under the fixed navbar: on a note that hid the whole Back/actions
+            row and sheared the title in half.
+          */}
           <main
-            className="mt-[52px] min-h-[calc(100vh-52px)]"
-            style={{ marginLeft: focusMode ? 0 : sidebarWidth }}
+            className="min-h-[100dvh]"
+            style={{
+              marginLeft: focusMode ? 0 : sidebarWidth,
+              paddingTop: 'var(--navbar-total)',
+            }}
           >
             <div className="animate-fadeUp">{children}</div>
           </main>
@@ -113,7 +128,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             writing area and appear to ride along with the page as it scrolls.
             Reserve bottom padding only when the bar is actually there.
           */}
-          <main className="pt-14 min-h-screen" style={{ paddingBottom: isNote ? 0 : 'var(--tabbar-total)' }}>
+          <main
+            className="min-h-[100dvh]"
+            style={{
+              paddingTop: 'var(--mobile-header-total)',
+              paddingBottom: isNote ? 0 : 'var(--tabbar-total)',
+            }}
+          >
             <div className="animate-fadeUp">{children}</div>
           </main>
           {!isNote && <MobileTabBar />}

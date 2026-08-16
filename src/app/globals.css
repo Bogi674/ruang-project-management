@@ -93,18 +93,49 @@
     --space-color: var(--accent-blue);
 
     /*
-     * Mobile chrome metrics. The tab bar and the FAB both derive from these,
-     * so the FAB can never land on top of the bar the way it did when each
-     * component hard-coded its own offset.
+     * Safe-area insets.
+     *
+     * The root viewport is declared `viewport-fit=cover`, so the layout
+     * viewport runs edge to edge — underneath the status bar and the home
+     * indicator. Every fixed bar therefore has to add the inset itself; a bare
+     * `top: 0` header renders *behind* the status bar in an installed PWA, and
+     * a bar sized to the full viewport height puts its last row under the home
+     * indicator (which is what buried the sidebar's Settings link).
+     *
+     * They are named once here so no component reaches for `env()` directly and
+     * gets a different answer.
      */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+
+    /*
+     * Chrome metrics. Every bar and every content offset derives from these, so
+     * a header can never be a different height than the space reserved for it.
+     * The `-total` values are what a fixed bar actually occupies on screen:
+     * its own height plus the inset it sits under.
+     */
+    --navbar-h: 52px;
+    --navbar-total: calc(var(--navbar-h) + var(--safe-top));
+    --mobile-header-h: 56px;
+    --mobile-header-total: calc(var(--mobile-header-h) + var(--safe-top));
     /* 49px matches the iOS native/Twitter bottom bar: the bar itself is short,
        and the home-indicator inset is added on top rather than baked in. */
     --tabbar-h: 49px;
-    --tabbar-total: calc(49px + env(safe-area-inset-bottom));
+    --tabbar-total: calc(var(--tabbar-h) + var(--safe-bottom));
     --fab-bottom: calc(var(--tabbar-total) + 16px);
-    /* Viewport minus the mobile header and the tab bar — used by full-height
-       screens (calendar) so they never scroll behind the chrome. */
-    --app-content-h: calc(100dvh - 56px - var(--tabbar-total));
+    /*
+     * Viewport minus the chrome — used by full-height screens (note editor,
+     * calendar) so they never scroll behind it.
+     *
+     * `dvh`, not `vh`: `100vh` is the *large* viewport height, which stays
+     * fixed while a mobile browser's toolbar is on screen and while the status
+     * bar band is reserved. Sizing to it pushes the bottom of a "full height"
+     * element past the visible area — the sidebar's Settings row was cut off
+     * for exactly this reason.
+     */
+    --app-content-h: calc(100dvh - var(--mobile-header-total) - var(--tabbar-total));
 
     /* Shadows */
     --shadow-card: 0 1px 4px rgba(44,56,72,.04);
@@ -117,12 +148,13 @@
     --shadow-docked: 0 -2px 12px rgba(44,56,72,.07);
   }
 
-  /* Desktop has no tab bar, so the FAB sits on the plain 28px inset. */
+  /* Desktop has no tab bar, so the FAB sits on the plain 28px inset — plus
+     whatever the home indicator claims, on a tablet running the installed PWA. */
   @media (min-width: 768px) {
     :root {
       --tabbar-total: 0px;
-      --fab-bottom: 28px;
-      --app-content-h: calc(100vh - 52px);
+      --fab-bottom: calc(28px + var(--safe-bottom));
+      --app-content-h: calc(100dvh - var(--navbar-total));
     }
   }
 

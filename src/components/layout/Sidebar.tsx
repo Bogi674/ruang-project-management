@@ -344,9 +344,24 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
 
   return (
     <>
+      {/*
+        Sized against the *visible* viewport, not `100vh`.
+
+        `100vh` is the large viewport height: it keeps counting the status-bar
+        band and any retractable browser toolbar, so `calc(100vh - 52px)` ran
+        the sidebar past the bottom of the screen and took the Settings link
+        with it — the row was there, just never on screen. `dvh` plus the
+        home-indicator inset keeps the whole column reachable.
+      */}
       <aside
-        className="fixed top-[52px] left-0 h-[calc(100vh-52px)] bg-bg-subtle border-r border-border-default flex flex-col z-30"
-        style={{ width }}
+        className="fixed left-0 bg-bg-subtle border-r border-border-default flex flex-col z-30"
+        style={{
+          width,
+          top: 'var(--navbar-total)',
+          height: 'calc(100dvh - var(--navbar-total))',
+          paddingBottom: 'var(--safe-bottom)',
+          paddingLeft: 'var(--safe-left)',
+        }}
       >
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 space-y-5">
           {/* Storeroom — also a drop target for un-assigning a note */}

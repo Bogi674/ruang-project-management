@@ -186,7 +186,9 @@ export function MobileDrawer({ open, onClose, userName = '', userEmail = '' }: M
           actions stop stacking into a tall, narrow column. */}
       <div
         className="fixed top-0 left-0 bottom-0 z-50 bg-bg-base flex flex-col animate-slideLeft shadow-modal"
-        style={{ width: 'min(88vw, 330px)' }}
+        // The drawer spans the full viewport, status-bar band included, so its
+        // header needs the same inset the app header gets.
+        style={{ width: 'min(88vw, 330px)', paddingTop: 'var(--safe-top)', paddingLeft: 'var(--safe-left)' }}
       >
         {/* Header — full logo lockup */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default flex-shrink-0">

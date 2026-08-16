@@ -315,7 +315,13 @@ export function NoteEditor({ noteId, initialNote, isNew, onFirstEdit }: NoteEdit
     // desktop 52px navbar height (which pushed the title under the header).
     // `docked-toolbar-gap` reserves the height of the formatting bar that is
     // fixed over the bottom of the screen on phones.
-    <div className="note-paper flex flex-col min-h-[60vh] md:h-[calc(100vh-52px)] md:min-h-0 docked-toolbar-gap">
+    //
+    // The desktop height is --app-content-h (viewport minus the navbar and its
+    // safe-area inset), so the writing column ends exactly where the screen
+    // does. Sized with `100vh` it overshot on any device that reserves a band
+    // for the status bar, and the note body's own scroll container never got
+    // the chance to take over.
+    <div className="note-paper flex flex-col min-h-[60vh] md:h-[var(--app-content-h)] md:min-h-0 docked-toolbar-gap">
       {/* Mobile action bar — the desktop action row is hidden on small screens,
           so delete / lock / history / export would otherwise be unreachable. */}
       <div className="flex md:hidden items-center gap-1 px-4 pt-3.5 flex-shrink-0">
