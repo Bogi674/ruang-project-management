@@ -369,7 +369,7 @@ Section labels: ui-monospace, monospace
 Desktop content padding:    36px 44px
 Note editor padding:        44px 80px (max-width 820px, centered)
 Sidebar default width:      280px (resizable, range 176-420px, persists to localStorage: ruang_sidebar_width)
-Top navbar height:          52px (desktop), 56px (mobile)
+Top navbar height:          52px (desktop), 56px (mobile) -- + safe-area-inset-top
 Bottom tab bar height:      49px (mobile) + safe-area-inset-bottom
 Formatting toolbar height:  46px (desktop), 44px (mobile)
 Card border-radius:         11-12px
@@ -379,6 +379,33 @@ Widget card radius:         10px
 Row item min-height:        52px (mobile), 44px (desktop)
 Icon well size:             28-44px square, radius 6-10px
 ```
+
+### Chrome metrics and the viewport -- three rules that must hold
+
+The root viewport is `viewport-fit=cover`, so the layout viewport runs edge to
+edge, underneath the status bar and the home indicator. Every fixed bar and
+every content offset therefore derives from one set of custom properties in
+`globals.css`: `--safe-top/-bottom/-left/-right`, `--navbar-total`,
+`--mobile-header-total`, `--tabbar-total`, `--fab-bottom`, `--app-content-h`.
+Never hard-code `52px`, `56px`, or a bare `env()` in a component -- a bar sized
+differently from the space reserved for it is how content ends up underneath it.
+
+1. **The navbar offset is padding, never margin.** `mt-[52px]` on the desktop
+   `<main>` collapsed straight out through `.app-canvas` and `<body>` -- nothing
+   in that chain establishes a block formatting context -- so it landed on the
+   root element instead of pushing content down inside the canvas. The document
+   became 52px taller than the viewport, giving every page a phantom 52px of
+   empty scroll; scrolling to the end slid the top of the page under the fixed
+   navbar, which on a note hid the entire Back/actions row and sheared the title
+   in half.
+2. **Full-height means `dvh`, never `vh`.** `100vh` is the *large* viewport
+   height: it keeps counting the status-bar band and any retractable browser
+   toolbar. The sidebar sized at `calc(100vh - 52px)` ran past the bottom of the
+   screen and took its Settings link with it -- rendered, never visible.
+3. **A fixed bar adds its own inset.** `top: 0` is the top of the layout
+   viewport, which is behind the status bar in the installed PWA. Each header
+   sets `height: var(--*-total)` with `padding-top: var(--safe-top)`; box-sizing
+   is border-box app-wide, so the declared height covers both.
 
 ### Shadows
 

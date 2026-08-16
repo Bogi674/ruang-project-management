@@ -495,16 +495,29 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
         </div>
       </div>
 
-      {/* Pinned Add button — never scrolls out of reach */}
+      {/* Pinned Add button — never scrolls out of reach.
+
+          On desktop the strip wraps to a second row, and a vertically centred
+          button then floated in the middle of a 2-row column with nothing to
+          align to. Pinning it to the top row (8px clears the row's own 6px
+          padding and centres the 28px button in the 32px controls) reads as
+          part of the toolbar instead of as a stray control. Mobile is a single
+          46px row, so it stays centred there. */}
       {onAddWidget && (
-        <div className="flex items-center pl-1.5 pr-3 border-l border-border-default flex-shrink-0 bg-bg-base">
+        <div className="flex items-center md:items-start md:pt-2 pl-1.5 pr-3 border-l border-border-default flex-shrink-0 bg-bg-base">
           <button
             type="button"
             onClick={onAddWidget}
             className="flex items-center gap-1.5 px-3 h-7 text-12 text-text-secondary border border-border-default rounded-lg hover:bg-bg-elevated hover:border-accent-blue hover:text-accent-blue-dark transition-colors duration-120 whitespace-nowrap"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
-            Add<span className="hidden md:inline">&nbsp;Widget</span>
+            {/* One flex item, not two.
+
+                A bare `Add` text node next to the span became its own anonymous
+                flex item, so the row's `gap-1.5` landed *between the two halves
+                of the label* and stacked on top of the nbsp — the button read
+                as "Add  Widget" with a hole in it. */}
+            <span>Add<span className="hidden md:inline"> Widget</span></span>
           </button>
         </div>
       )}

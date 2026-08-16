@@ -95,7 +95,7 @@ export function MobileTabBar() {
     // the page's bottom padding stay in lockstep with the bar.
     <nav
       className="fixed bottom-0 left-0 right-0 z-40 bg-bg-base border-t border-border-default flex"
-      style={{ height: 'var(--tabbar-total)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ height: 'var(--tabbar-total)', paddingBottom: 'var(--safe-bottom)' }}
     >
       {TABS.map((tab) => {
         const active = pathname === tab.href || (tab.href !== '/home' && pathname?.startsWith(tab.href));

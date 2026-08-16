@@ -29,7 +29,20 @@ export function TopNavbar({ autosaveState, userName = '', userImage, focusMode, 
   const isNoteEditor = pathname?.startsWith('/note');
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 h-[52px] bg-bg-base border-b border-border-default flex items-center px-5 gap-6">
+    // `top: 0` is the top of the *layout* viewport, which runs under the status
+    // bar because the root viewport is `viewport-fit=cover`. The safe-area
+    // inset is added as padding on top of the 52px bar (box-sizing is
+    // border-box app-wide, so --navbar-total covers both) — otherwise the
+    // logo and the nav tabs sit behind the clock in the installed PWA.
+    <header
+      className="fixed top-0 left-0 right-0 z-40 bg-bg-base border-b border-border-default flex items-center gap-6"
+      style={{
+        height: 'var(--navbar-total)',
+        paddingTop: 'var(--safe-top)',
+        paddingLeft: 'calc(20px + var(--safe-left))',
+        paddingRight: 'calc(20px + var(--safe-right))',
+      }}
+    >
       <Logo variant="text" height={26} />
 
       {!focusMode && (
