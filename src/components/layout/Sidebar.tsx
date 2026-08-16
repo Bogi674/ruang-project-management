@@ -345,20 +345,26 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
   return (
     <>
       {/*
-        Sized against the *visible* viewport, not `100vh`.
+        Anchored top AND bottom — never sized with a viewport-height unit.
 
-        `100vh` is the large viewport height: it keeps counting the status-bar
-        band and any retractable browser toolbar, so `calc(100vh - 52px)` ran
-        the sidebar past the bottom of the screen and took the Settings link
-        with it — the row was there, just never on screen. `dvh` plus the
-        home-indicator inset keeps the whole column reachable.
+        `h-[calc(100vh-52px)]` is what buried the Settings link. `100vh` is the
+        *large* viewport height: it keeps counting the status-bar band and any
+        retractable browser toolbar, so the column ran past the bottom of the
+        screen and took its last row with it — Settings was rendered, just
+        never on screen. Only its top border cleared the edge, which is why the
+        sidebar looked like it ended in a stray hairline.
+
+        `dvh` would compute the right number today, but a pair of insets is not
+        arithmetic at all: `bottom: 0` is resolved by the containing block, so
+        the column ends where the viewport ends on every device, in every
+        orientation, whatever the chrome is doing. The safe-area padding then
+        lifts Settings clear of the home indicator.
       */}
       <aside
-        className="fixed left-0 bg-bg-subtle border-r border-border-default flex flex-col z-30"
+        className="fixed left-0 bottom-0 bg-bg-subtle border-r border-border-default flex flex-col z-30"
         style={{
           width,
           top: 'var(--navbar-total)',
-          height: 'calc(100dvh - var(--navbar-total))',
           paddingBottom: 'var(--safe-bottom)',
           paddingLeft: 'var(--safe-left)',
         }}
