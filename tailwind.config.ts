@@ -40,6 +40,7 @@ const config: Config = {
         'accent-green': 'var(--accent-green)',
         'accent-green-mid': 'var(--accent-green-mid)',
         'accent-green-dark': 'var(--accent-green-dark)',
+        'accent-green-ink': 'var(--accent-green-ink)',
         'accent-slate': 'var(--accent-slate)',
         'accent-slate-dark': 'var(--accent-slate-dark)',
         'accent-amber': 'var(--accent-amber)',

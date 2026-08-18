@@ -14,6 +14,7 @@ import {
   moveNoteToSpace,
   emitNotesChanged,
   NOTES_CHANGED_EVENT,
+  TODOS_CHANGED_EVENT,
 } from '@/lib/dnd';
 
 const PINNED_KEY = 'ruang_pinned_spaces';
@@ -206,6 +207,7 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
   // Shared across the sidebar, the drawer, note lists and the editor.
   const { spaces, refresh: refreshSpaces } = useSpaces();
   const [storeroomCount, setStoreroomCount] = useState(0);
+  const [todoCount, setTodoCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [modalParent, setModalParent] = useState<{ id: string; name: string } | null>(null);
   const [editSpace, setEditSpace] = useState<Space | null>(null);
@@ -224,6 +226,15 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
       .catch(() => {});
   }, []);
 
+  // Open to-dos, for the "My To-do" badge. `count=true` skips the row query,
+  // so this stays cheap enough to run on every navigation.
+  const refreshTodoCount = useCallback(() => {
+    fetch('/api/todos?count=true')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setTodoCount(d?.total || 0))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setPinnedIdsState(getPinnedIds());
   }, []);
@@ -232,8 +243,9 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
   // refresh cadence as the storeroom badge.
   useEffect(() => {
     refreshCount();
+    refreshTodoCount();
     refreshSpaces();
-  }, [pathname, refreshCount, refreshSpaces]);
+  }, [pathname, refreshCount, refreshTodoCount, refreshSpaces]);
 
   // Refresh when a note is moved or deleted anywhere in the app.
   useEffect(() => {
@@ -242,8 +254,12 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
       refreshSpaces();
     }
     window.addEventListener(NOTES_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(NOTES_CHANGED_EVENT, onChanged);
-  }, [refreshCount, refreshSpaces]);
+    window.addEventListener(TODOS_CHANGED_EVENT, refreshTodoCount);
+    return () => {
+      window.removeEventListener(NOTES_CHANGED_EVENT, onChanged);
+      window.removeEventListener(TODOS_CHANGED_EVENT, refreshTodoCount);
+    };
+  }, [refreshCount, refreshTodoCount, refreshSpaces]);
 
   // Close the space menu on outside click / escape / scroll.
   useEffect(() => {
@@ -383,6 +399,33 @@ export function Sidebar({ width, onWidthChange }: SidebarProps) {
               {storeroomCount > 0 && (
                 <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-accent-green text-accent-green-dark rounded-full flex-shrink-0">
                   {storeroomCount}
+                </span>
+              )}
+            </Link>
+
+            {/* My To-do — under Pinned, above Spaces, with the open count. */}
+            <Link
+              href="/todo"
+              className={`flex items-center gap-2 px-3 py-2 mt-0.5 rounded-lg text-[13px] no-underline transition-colors duration-120 ${
+                pathname?.startsWith('/todo')
+                  ? 'bg-accent-blue-bg text-accent-blue-dark'
+                  : 'text-text-secondary hover:bg-border-light hover:text-text-primary'
+              }`}
+              style={{ fontWeight: pathname?.startsWith('/todo') ? 580 : 400 }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              <span className="flex-1 truncate">My To-do</span>
+              {todoCount > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full flex-shrink-0 ${
+                    pathname?.startsWith('/todo')
+                      ? 'bg-bg-base text-accent-blue-dark'
+                      : 'bg-accent-green text-accent-green-dark'
+                  }`}
+                >
+                  {todoCount}
                 </span>
               )}
             </Link>

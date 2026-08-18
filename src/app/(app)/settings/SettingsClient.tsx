@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { TodoSettingsTab } from '@/components/todos/TodoSettingsTab';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { getInitials } from '@/lib/utils';
@@ -154,7 +155,7 @@ const TINT_OPTIONS = [
   { value: 'accent', label: 'Accent' },
 ];
 
-type SettingsTab = 'profile' | 'appearance';
+type SettingsTab = 'profile' | 'appearance' | 'to-do';
 
 export function SettingsClient({ name, email, image, isGoogleUser }: SettingsClientProps) {
   const router = useRouter();
@@ -169,7 +170,7 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-border-default mb-8">
-        {(['profile', 'appearance'] as SettingsTab[]).map((t) => (
+        {(['profile', 'appearance', 'to-do'] as SettingsTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -203,6 +204,14 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
             saveError={saveError}
           />
         </>
+      )}
+
+      {tab === 'to-do' && (
+        <TodoSettingsTab
+          preferences={preferences}
+          updatePreferences={updatePreferences}
+          saveError={saveError}
+        />
       )}
 
       {/* Danger zone - always visible at bottom */}

@@ -29,6 +29,22 @@ const TABS: Tab[] = [
       ),
   },
   {
+    label: 'To-do',
+    href: '/todo',
+    icon: (active) =>
+      active ? (
+        <svg width={SIZE} height={SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" fill="currentColor" fillOpacity=".2" />
+          <polyline points="9 11 12 14 22 4" />
+        </svg>
+      ) : (
+        <svg width={SIZE} height={SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 11 12 14 22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+      ),
+  },
+  {
     label: 'Calendar',
     href: '/calendar',
     icon: (active) =>

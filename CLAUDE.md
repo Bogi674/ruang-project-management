@@ -84,6 +84,22 @@ notes
   published_at (nullable, Phase 3 only),
   created_at, updated_at
 
+todos  -- added in supabase_schema_phase7.sql
+  id, user_id,
+  parent_id (nullable -- non-null = sub-task, exactly one level deep),
+  space_id (nullable), title, description,
+  due_date (date, nullable), due_time (time, nullable),   -- set independently
+  estimate_minutes, position (double precision -- fractional ordering),
+  is_completed, completed_at,
+  subtask_mode (independent | dependent),
+  recurrence (jsonb), recurrence_parent_id,
+  reminder (jsonb), source_note_id (set by the checklist migration),
+  created_at, updated_at
+
+todo_attachments  -- added in supabase_schema_phase7.sql
+  id, todo_id, user_id, kind (file | note), file_id, note_id, created_at
+  (CHECK enforces exactly one target, matching `kind`)
+
 note_versions  -- added in supabase_schema_phase2.sql
   id, note_id, user_id, content (jsonb), title, created_at
   (max 20 per note; ordered by created_at desc; revertible)
@@ -156,8 +172,14 @@ notifications
 - `supabase_schema_phase6.sql` -- clears the Supabase database linter: pins
   `search_path` on the schema's functions and revokes their EXECUTE grant **from
   `PUBLIC`**
+- `supabase_schema_phase7.sql` -- additive: the `todos` and `todo_attachments`
+  tables, their indexes and RLS, and seven `users.todo_*` preference columns.
+  Deliberately does **not** grant the new tables to `authenticated`: phase 4
+  took `usage on schema public` away from that role because every query goes
+  through a Next.js route on the service role, and granting here would put the
+  tables back on the Data API the moment schema usage were restored.
 
-All six files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
+All seven files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
 for the appearance columns and their constraints** -- running it alone is enough to
 bring an older database up to date. A missing preference column is not cosmetic:
 PostgREST fails a `select` as a whole when one column in it is unknown, which made
@@ -508,6 +530,7 @@ leaves the bounce. It also removes pull-to-refresh, which an installed PWA shoul
 | My Room | `/room` | Today focus + pinned + quick links + coming up |
 | Search | `/search` | Full-text search |
 | Calendar | `/calendar` | Month/week, drag to assign date, unscheduled tray |
+| To-do | `/todo` | Today (default) / Week / Month / All, list or calendar view |
 | Account Settings | `/settings` | Profile tab + Appearance tab + Danger zone |
 
 All authenticated routes live inside an App Shell with top navbar + sidebar (desktop)
@@ -521,14 +544,16 @@ or top header + bottom tab bar (mobile). Shell is in `src/app/(app)/layout.tsx`.
 
 **Top Navbar** (52px, white, border-bottom 1px #e8ecf2)
 - Left: Logo component (Y-mark + "ruang" wordmark, Newsreader 17px), navigates to /home
-- Center-left: 4 nav tabs -- Home / Calendar / My Room / Search
+- Center-left: 5 nav tabs -- Home / To-do / Calendar / My Room / Search
+  (To-do sits second: it is the screen the app is opened for daily)
   - Active tab: color #2c3848, font-weight 580, border-bottom 2.5px solid #A1B5D8
   - Inactive: color #9aaab8
 - Right: keyboard shortcut button (?) + focus mode toggle (F) + autosave indicator (note only) + notification bell + avatar (32px, navigates to /settings)
 
 **Left Sidebar** (default 280px, bg #f4f5f7, border-right 1px #e8ecf2, always visible unless focus mode)
 - Resizable: drag handle on right edge. Range: 176-420px. Persists to `localStorage` key `ruang_sidebar_width`.
-- Sections: PINNED (My Storeroom with green count badge) / SPACES (tree with + button) / Settings gear
+- Sections: PINNED (My Storeroom with green count badge, then My To-do with its
+  open count) / SPACES (tree with + button) / Settings gear
 - Space tree items: color dot (7/6/5px by depth level) + name + emoji icon + note count
 - Pinned spaces: star icon in amber, managed via localStorage `ruang_pinned_spaces`
 - Expandable spaces: chevron shows sub-spaces AND inline note list (SpaceNoteList component)
@@ -543,7 +568,7 @@ or top header + bottom tab bar (mobile). Shell is in `src/app/(app)/layout.tsx`.
 - Inside note editor: back chevron left, note title center, overflow menu right
 
 **Bottom Tab Bar** (49px, white, border-top 1px #e8ecf2, safe-area bottom)
-- 4 tabs: Home / Calendar / My Room / Search
+- 5 tabs: Home / To-do / Calendar / My Room / Search
 - Each: icon (SVG 20px) + label (10px), inactive #9aaab8, active #4a6090
 - Hidden when note editor is open (editor is full-screen)
 
@@ -566,7 +591,7 @@ or top header + bottom tab bar (mobile). Shell is in `src/app/(app)/layout.tsx`.
 | Label | Action |
 |---|---|
 | Note | POST /api/notes, navigate to /note/[id] |
-| To-do | POST /api/notes (type: checklist), navigate to /note/[id] |
+| To-do | Navigate to /todo?compose=1 -- writes nothing until the title is typed |
 | Reminder | POST /api/notes, navigate to /note/[id]?widget=reminder |
 | File Upload | POST /api/notes, navigate to /note/[id]?widget=file |
 | Link / Bookmark | POST /api/notes, navigate to /note/[id]?widget=link |
@@ -649,9 +674,86 @@ Key behaviors:
 - First line = title (editable in textarea above editor).
 - TipTap RTE with FormattingToolbar.
 
-### To-do (Checklist)
+### Checklist note (legacy)
 - Identical to Note but opens with a checklist (taskList) block pre-populated.
 - Checklist item checked state: bg #A1B5D8, white tick, text line-through, color #b8c8d6.
+- **No longer how a to-do is created.** The FAB's To-do entry routes to
+  `/todo?compose=1` and `notes.type = 'checklist'` is kept only so existing
+  notes still open and can be converted -- see the To-do System below.
+
+---
+
+## To-do System (phase 7)
+
+A to-do is a `todos` row, not a note. Everything below lives under
+`src/components/todos/` unless stated.
+
+**State.** `TodoProvider` mirrors `PreferencesProvider`: one flat `Todo[]`
+(parents *and* sub-tasks) with the grouped view derived in a `useMemo`. Flat is
+the point -- a completion or a rename is a `map`, where a grouped structure
+would need the row found and rebuilt inside whichever bucket it sits in. Every
+mutation is optimistic and rolls the single row back on failure.
+
+**Grouping** is in `lib/todoQuery.ts` and is shared by `GET /api/todos` and the
+`/todo` server component, so the first paint and every later refetch agree.
+The window is *not* a plain BETWEEN: it is "inside the range, OR undated, OR
+open and already past", because overdue is pinned above the groups under every
+filter. Drop the last clause and Monday morning hides the weekend's slippage.
+
+**Dates.** `due_date` and `due_time` are two nullable columns, set
+independently. Everything converting between them and `Date` goes through
+`lib/todos.ts` -- `new Date('2026-08-18')` parses as *UTC* midnight and lands on
+the 17th anywhere west of Greenwich, which would make "Today" wrong for half
+the day.
+
+**Ordering** is a fractional `position` scoped to `(user_id, due_date)`. A drop
+writes the midpoint of its new neighbours, so a reorder -- including a
+cross-date one, which carries the new `due_date` in the same PATCH -- is one
+UPDATE. Midpoints run out of float precision eventually; `needsRebalance()`
+detects that and the group is renumbered onto clean multiples in the same
+request.
+
+**Drag and drop** is `TodoDragContext`, built on **Pointer Events**, not the
+HTML5 DnD that `lib/dnd.ts` uses for notes. HTML5 DnD does not fire on touch at
+all, and cross-date reordering was asked for on a phone as much as a desktop.
+Drop targets are found by hit-testing `data-drop-group` / `data-drop-index` in
+the DOM, which is why calendar cells and the Unassigned tray are drop targets
+with no wiring of their own. Touch lifts on a 350ms long press; a mouse lifts
+after 4px of movement. `Ctrl/Cmd + ↑/↓` does the same thing from the keyboard.
+
+**Sub-tasks** are `todos` rows with `parent_id` set, **one level only**. The
+database cannot express that (it needs a second row), so `POST /api/todos`
+rejects a `parent_id` that itself has a parent. `subtask_mode = 'dependent'`
+locks the parent's checkbox until its last sub-task closes, and the API
+enforces it as well as the UI.
+
+**Recurrence** generates one real row at a time: completing an instance creates
+the next and points it at the rule's owner via `recurrence_parent_id`. Done on
+completion rather than by a cron because there is no cron in this app yet.
+`on_missed` defaults to `skip` -- rolling every missed occurrence forward turns
+one abandoned daily habit into a wall of overdue.
+
+**Rollover** is `POST /api/todos/rollover`, called once a day by the To-do page
+(the same "no cron yet" constraint). Idempotent: the second call the same day
+matches no past-dated rows. The server re-checks the setting -- the client
+asking does not make it the user's choice.
+
+**Overdue is amber, never red.** `--danger` is for destructive actions. Being
+late is a state of affairs, not an error, and painting it like one makes a list
+of slipped to-dos read as a telling-off.
+
+**Settings** are seven `users.todo_*` columns carried by `UserPreferences`
+alongside the appearance ones -- same `/api/users` call, same `ruang_prefs`
+cache, so the To-do page has them before first paint. They are *not* theme
+values and `resolveTheme()` ignores them; `resolveTodoPreferences()` in
+`lib/todos.ts` resolves the defaults, because null means "never chosen", not
+"off".
+
+**Migration.** `POST /api/todos/migrate` converts `type = 'checklist'` notes:
+each TipTap `taskItem` becomes an unassigned to-do keeping its order, checked
+state and the note's space. The note is never deleted, and each to-do links
+back through `source_note_id` -- which is also what makes the card
+re-runnable without duplicating anything.
 
 ---
 
@@ -678,7 +780,7 @@ Key behaviors:
 
 ## Appearance Settings (Live)
 
-Settings page (`/settings`) has two tabs: **Profile** and **Appearance**.
+Settings page (`/settings`) has three tabs: **Profile**, **Appearance** and **To-do**.
 
 **Appearance tab options:**
 - Accent color: 6 presets (Soft Blue, Sage, Sand, Rose, Plum, Slate). Applied live to CSS vars.
@@ -1021,9 +1123,29 @@ Two supporting pieces, both easy to break:
 - Reminder email send (manual trigger via POST /api/reminders/send + Resend)
 - PWA installable (manifest.json + icons)
 
+### Phase 7 -- First-class To-dos (built)
+
+- `todos` + `todo_attachments` tables, RLS, and seven `users.todo_*` preference columns
+- `/todo` with Today / Week / Month / All, list and calendar views
+- Quick add everywhere (sticky bar, per-group inline row, Unassigned column, mobile sheet, FAB)
+  with typed date/duration parsing ("fri 3pm", "~20m") echoed as dismissible chips
+- Pointer-Events drag and drop: within a group, across dates, onto calendar cells,
+  onto the Unassigned tray; `Ctrl/Cmd + ↑/↓` from the keyboard
+- Sub-tasks with Independent / Dependent completion
+- Deadline, Reminder, Repeat and Attach popovers; 440px detail drawer
+- Focus mode with a 25-minute timer; progress bar and streak
+- Recurrence, rollover, and the one-time checklist-note migration
+- FAB To-do entry re-pointed; Home today-strip; sidebar and tab-bar entries
+
 ### Phase 2 -- Polish and Power (not yet built)
 
-- Automated reminder cron delivery (scheduled worker checks reminder_deliveries table)
+- Automated reminder cron delivery (scheduled worker checks reminder_deliveries table).
+  To-do reminders reuse the same `ReminderLead` vocabulary and are stored ready for it,
+  but nothing delivers them yet -- and the same worker should take over the
+  rollover and recurrence checks that `/todo` currently runs on first load.
+- To-do file attachments: `todo_attachments.kind = 'file'` and its API route exist,
+  but the only upload path in the UI is the note editor's, so the Attach popover
+  offers notes only.
 - Space sharing (invite by email, viewer/editor roles)
 - Focus mode per-space (currently focus mode is global)
 - Slash command picker inside TipTap (/ command menu)

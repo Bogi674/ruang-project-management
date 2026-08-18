@@ -10,6 +10,12 @@ interface FabEntry {
   label: string;
   noteType: NoteType;
   widget?: WidgetType;
+  /**
+   * A route to push instead of creating a note. To-do is the only entry that
+   * uses it: to-dos are their own rows now, so this must not POST /api/notes
+   * with `type: 'checklist'` and leave an empty note behind.
+   */
+  href?: string;
   bg: string;
   color: string;
   icon: React.ReactNode;
@@ -31,6 +37,9 @@ const FAB_ITEMS: FabEntry[] = [
   {
     label: 'To-do',
     noteType: 'checklist',
+    // Opens quick-add on /todo. Desktop focuses the bar, mobile opens the
+    // bottom sheet — TodoClient reads `compose` and decides which.
+    href: '/todo?compose=1',
     bg: 'var(--accent-green)',
     color: 'var(--accent-green-dark)',
     icon: (
@@ -101,6 +110,15 @@ export function FAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
   async function handleCreate(item: FabEntry) {
     if (creating) return;
     setOpen(false);
+
+    // Entries that only navigate write nothing — the to-do is created by the
+    // quick-add field once it has a title, so a cancelled compose leaves no
+    // empty row behind. Same principle as the widget picker.
+    if (item.href) {
+      router.push(item.href);
+      return;
+    }
+
     setCreating(true);
 
     try {

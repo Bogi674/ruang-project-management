@@ -14,6 +14,15 @@
  * hard-coded hex values in components.
  */
 
+/**
+ * Every column PreferencesProvider loads, caches and writes back.
+ *
+ * The to-do settings ride along even though they change nothing about the
+ * palette: they are user preference columns on the same row, fetched by the
+ * same `/api/users` call and cached by the same `ruang_prefs` entry, so
+ * carrying them here means the To-do page has its settings before its first
+ * paint instead of after a second round trip. `resolveTheme` ignores them.
+ */
 export interface UserPreferences {
   accent_color: string | null;
   typography_preference: string | null;
@@ -23,6 +32,13 @@ export interface UserPreferences {
   theme_preference: string | null;
   app_background_preference: string | null;
   background_tint_preference: string | null;
+  todo_default_assignment: string | null;
+  todo_done_behavior: string | null;
+  todo_subtask_mode: string | null;
+  todo_show_estimates: boolean | null;
+  todo_show_progress: boolean | null;
+  todo_today_cap: number | null;
+  todo_rollover: boolean | null;
 }
 
 export const defaultPreferences: UserPreferences = {
@@ -34,6 +50,13 @@ export const defaultPreferences: UserPreferences = {
   theme_preference: null,
   app_background_preference: null,
   background_tint_preference: null,
+  todo_default_assignment: null,
+  todo_done_behavior: null,
+  todo_subtask_mode: null,
+  todo_show_estimates: null,
+  todo_show_progress: null,
+  todo_today_cap: null,
+  todo_rollover: null,
 };
 
 export const ACCENT_PRESETS = [

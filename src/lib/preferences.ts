@@ -35,12 +35,20 @@ const PREFS_CACHE_KEY = 'ruang_prefs';
 
 const PREFERENCE_KEYS = Object.keys(defaultPreferences) as (keyof UserPreferences)[];
 
-/** Narrows an arbitrary object to the preference columns we recognise. */
+/**
+ * Narrows an arbitrary object to the preference columns we recognise.
+ *
+ * Booleans and numbers are accepted as well as strings: the to-do settings
+ * added in phase 7 are `boolean` and `int` columns, and a string-only filter
+ * dropped them silently — the settings would apply, then read back as unset on
+ * the next load with nothing to show for it.
+ */
 function pickPreferences(source: Record<string, unknown>): Partial<UserPreferences> {
   const out: Partial<UserPreferences> = {};
   for (const key of PREFERENCE_KEYS) {
     const value = source[key];
-    if (typeof value === 'string' || value === null) {
+    const type = typeof value;
+    if (value === null || type === 'string' || type === 'boolean' || type === 'number') {
       out[key] = value as never;
     }
   }

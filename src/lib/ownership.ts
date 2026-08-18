@@ -60,6 +60,42 @@ export async function ownsWidget(
   return !!data;
 }
 
+/** True when the to-do exists and belongs to `userId`. */
+export async function ownsTodo(
+  db: SupabaseClient,
+  userId: string,
+  todoId: string
+): Promise<boolean> {
+  const { data } = await db
+    .from('todos')
+    .select('id')
+    .eq('id', todoId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * True when the file exists and was uploaded by `userId`.
+ *
+ * Attaching a file to a to-do is the same class of reference as `note_id` on a
+ * widget: the row that lands carries the caller's user_id and passes every
+ * row-level filter while pointing at somebody else's R2 object.
+ */
+export async function ownsFile(
+  db: SupabaseClient,
+  userId: string,
+  fileId: string
+): Promise<boolean> {
+  const { data } = await db
+    .from('files')
+    .select('id')
+    .eq('id', fileId)
+    .eq('uploaded_by', userId)
+    .maybeSingle();
+  return !!data;
+}
+
 /** Postgres rejects a malformed uuid with a 500; check the shape first. */
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
