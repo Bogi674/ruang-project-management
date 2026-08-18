@@ -296,8 +296,51 @@ itself, and sets default privileges so a future table arrives closed. The same
 file asserts RLS is enabled on all eight application tables, so the policies are
 live the day the app moves off the service role.
 
+For tables that closed it. For **functions** it did not — see finding 18.
+
 Reversible: if a browser client is ever added, grant back the specific tables it
 needs and let the existing policies do their work.
+
+---
+
+## 18. `handle_new_user()` was callable over the REST API — **fixed (2026-08-18)**
+
+Reported by the Supabase database linter (advisories 0028 and 0029), alongside
+two `search_path` warnings (0011).
+
+Postgres grants `EXECUTE` on every new function to `PUBLIC`, and PostgREST
+publishes anything executable at `/rest/v1/rpc/<name>`. `public.handle_new_user()`
+is `SECURITY DEFINER`, so a call over that endpoint runs its
+`insert into public.users` with the **owner's** rights rather than the caller's.
+
+Finding 17's revoke did not close this, and the reason is worth keeping:
+`revoke all on all functions in schema public from anon, authenticated` removes
+what those two *roles* hold. It does not touch the grant they inherit from
+`PUBLIC`, and that is the one they were using. `PUBLIC` has to be named.
+
+`supabase_schema_phase6.sql` revokes `EXECUTE` from `public`, `anon` and
+`authenticated` on the three functions this schema owns, and sets default
+privileges so a future function arrives without the `PUBLIC` grant. The triggers
+are unaffected: Postgres checks `EXECUTE` on a trigger function when the trigger
+is *created*, not each time it fires.
+
+The same file pins `search_path` on `update_updated_at()` (empty — the body calls
+only `now()`, and `pg_catalog` is searched implicitly) and on the orphaned
+`generate_public_id`, which is left over from the deprecated project-management
+schema and referenced nowhere in this codebase. An unpinned `search_path` lets
+the caller's path decide which objects an unqualified name in the body resolves
+to, which matters most for the `SECURITY DEFINER` case above.
+
+What phase 6 deliberately does **not** do is revoke across the whole schema.
+`supabase_schema.sql` runs `create extension "uuid-ossp"` with no target schema,
+so on Supabase `uuid_generate_v4()` can land in `public` — and `spaces.id` and
+`notes.id` default to it. A blanket revoke would take `EXECUTE` away from the
+role doing the inserting and break row creation.
+
+Not fixable in SQL, and still open: **leaked password protection is disabled**
+(Dashboard > Authentication > Sign In / Providers > Password). Turning it on
+checks new passwords against HaveIBeenPwned. Worth doing — finding 7 leaves
+credential stuffing only speed-bumped.
 
 ### What hardening cannot do
 
@@ -332,3 +375,5 @@ and any hosted database works this way. Two clarifications worth having:
    recurring. Phase 4 has already switched enforcement on, so the policies take
    effect the moment the queries move.
 5. **Move avatars to R2** (finding 15).
+6. **Enable leaked password protection** in the Auth dashboard (finding 18). A
+   toggle, and it is the cheapest control on this list.
