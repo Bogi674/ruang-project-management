@@ -297,9 +297,14 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- Automatically bump updated_at on every note update.
+-- The empty search_path is deliberate: the body calls only now(), and
+-- pg_catalog is searched implicitly regardless, so there is nothing left for a
+-- caller-controlled path to redirect. An unpinned path is what the Supabase
+-- linter reports as 0011_function_search_path_mutable.
 create or replace function public.update_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -311,3 +316,15 @@ drop trigger if exists notes_updated_at on notes;
 create trigger notes_updated_at
   before update on notes
   for each row execute procedure public.update_updated_at();
+
+-- Postgres grants EXECUTE on a new function to PUBLIC, and PostgREST publishes
+-- anything executable at /rest/v1/rpc/<name>. Neither of these is meant to be
+-- callable over the API; both only ever run from their trigger. Postgres checks
+-- EXECUTE when a trigger is created rather than each time it fires, so the
+-- triggers above are unaffected.
+--
+-- PUBLIC has to be named. Revoking from anon and authenticated alone leaves the
+-- privilege they inherit from PUBLIC in place, which is why the linter kept
+-- reporting 0028/0029 after phase 4's revoke.
+revoke execute on function public.handle_new_user()   from public, anon, authenticated;
+revoke execute on function public.update_updated_at() from public, anon, authenticated;

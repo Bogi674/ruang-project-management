@@ -153,8 +153,11 @@ notifications
   `anon` / `authenticated` access to the whole `public` schema
 - `supabase_schema_phase5.sql` -- **rebuilds the appearance CHECK constraints
   unconditionally** from the value lists in `lib/theme.ts`
+- `supabase_schema_phase6.sql` -- clears the Supabase database linter: pins
+  `search_path` on the schema's functions and revokes their EXECUTE grant **from
+  `PUBLIC`**
 
-All five files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
+All six files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
 for the appearance columns and their constraints** -- running it alone is enough to
 bring an older database up to date. A missing preference column is not cosmetic:
 PostgREST fails a `select` as a whole when one column in it is unknown, which made
@@ -168,6 +171,18 @@ is nothing to do. Phase 5 drops and recreates instead (resetting out-of-list row
 NULL first, since `add constraint` validates existing rows). **Any future change to
 `APP_BACKGROUND_VALUES`, `BACKGROUND_TINT_VALUES` or `THEME_VALUES` needs a matching
 drop-and-recreate migration -- an `if not exists` guard will silently skip it.**
+
+Phase 6 covers a second trap in the same family. Postgres grants `EXECUTE` on every
+new function to `PUBLIC`, and PostgREST publishes anything executable at
+`/rest/v1/rpc/<name>` -- including `handle_new_user()`, which is `SECURITY DEFINER`.
+Phase 4's `revoke all on all functions ... from anon, authenticated` does **not**
+close that: revoking from a role leaves the privilege it inherits from `PUBLIC`
+intact, so `PUBLIC` has to be named. Phase 6 also pins `search_path` on every
+function this schema owns. It does *not* revoke across the whole schema:
+`supabase_schema.sql` creates `uuid-ossp` with no target schema, so
+`uuid_generate_v4()` can land in `public`, and `spaces.id` / `notes.id` default to
+it -- a blanket revoke would break row creation. **A new function in `public` needs
+its own `revoke execute ... from public` and a pinned `search_path`.**
 
 ---
 
