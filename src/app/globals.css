@@ -58,6 +58,12 @@
        Recomputed per accent colour by resolveTheme(). */
     --accent-ink: #ffffff;
 
+    /* The tick drawn on a completed to-do's sage fill. Deliberately NOT
+       --accent-ink: that follows the user's accent and goes dark on Sand or
+       Rose, while the surface underneath it here is always --accent-green-mid
+       (pale sage in light, deep green in dark) and takes white in both. */
+    --accent-green-ink: #ffffff;
+
     /* Page canvas — the surface behind cards. Driven by the background-tint
        preference; the literals here are only the pre-hydration fallback. */
     --canvas-base: #f4f7fb;

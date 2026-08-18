@@ -60,3 +60,19 @@ export function emitNotesChanged() {
     window.dispatchEvent(new CustomEvent(NOTES_CHANGED_EVENT));
   }
 }
+
+/**
+ * The same idea for to-dos, so the sidebar's open count follows a completion
+ * made on the To-do page without waiting for a navigation.
+ *
+ * Kept here beside the notes event rather than in the to-do components: the
+ * sidebar listens for both, and a listener whose two events come from
+ * different modules is one refactor away from only handling one of them.
+ */
+export const TODOS_CHANGED_EVENT = 'ruang:todos-changed';
+
+export function emitTodosChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(TODOS_CHANGED_EVENT));
+  }
+}

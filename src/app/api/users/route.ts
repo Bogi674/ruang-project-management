@@ -54,7 +54,26 @@ function validate(key: string, value: unknown): string | null {
     return null;
   }
 
-  const allowed = PREFERENCE_ENUMS[key];
+  // To-do settings. Unlike the appearance columns these are not all strings,
+  // so they cannot ride in PREFERENCE_ENUMS — but they reach the same CHECK
+  // constraints, and a value the database rejects surfaces as a setting that
+  // silently snaps back, so they are validated just as strictly.
+  if (TODO_BOOLEAN_KEYS.includes(key)) {
+    if (value !== null && typeof value !== 'boolean') return `Invalid value for ${key}.`;
+    return null;
+  }
+
+  if (key === 'todo_today_cap') {
+    // 0 is the off switch the toggle writes; the constraint allows 1–50, so
+    // "no cap" has to be stored as null rather than 0.
+    if (value === null) return null;
+    if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 50) {
+      return 'The Today cap has to be between 1 and 50.';
+    }
+    return null;
+  }
+
+  const allowed = PREFERENCE_ENUMS[key] ?? TODO_PREFERENCE_ENUMS[key];
   if (allowed) {
     if (value !== null && (typeof value !== 'string' || !allowed.includes(value))) {
       return `Invalid value for ${key}.`;
@@ -64,6 +83,14 @@ function validate(key: string, value: unknown): string | null {
 
   return null;
 }
+
+const TODO_BOOLEAN_KEYS = ['todo_show_estimates', 'todo_show_progress', 'todo_rollover'];
+
+const TODO_PREFERENCE_ENUMS: Record<string, readonly string[]> = {
+  todo_default_assignment: ['today', 'unassigned'],
+  todo_done_behavior: ['stay', 'section'],
+  todo_subtask_mode: ['independent', 'dependent'],
+};
 
 const EDITABLE = [
   'name',
@@ -76,6 +103,13 @@ const EDITABLE = [
   'theme_preference',
   'app_background_preference',
   'background_tint_preference',
+  'todo_default_assignment',
+  'todo_done_behavior',
+  'todo_subtask_mode',
+  'todo_show_estimates',
+  'todo_show_progress',
+  'todo_today_cap',
+  'todo_rollover',
 ];
 
 /**
@@ -90,15 +124,21 @@ const EDITABLE = [
  * Only the SQLSTATE travels, never the message: codes are a fixed public
  * vocabulary, messages quote column and constraint names.
  */
-function saveFailureReason(dbError: { code?: string; message?: string }): string {
+function saveFailureReason(dbError: { code?: string; message?: string }, keys: string[]): string {
+  // Which file to run depends on which columns the request carried: the
+  // appearance columns arrived in phase 5, the to-do settings in phase 7.
+  const file = keys.some((k) => k.startsWith('todo_'))
+    ? 'supabase_schema_phase7.sql'
+    : 'supabase_schema_phase5.sql';
+
   switch (dbError.code) {
     // undefined_column, and PostgREST's equivalent when the column is missing
     // from its cached schema.
     case '42703':
     case 'PGRST204':
-      return 'this database has no column for that setting yet — run supabase_schema_phase5.sql.';
+      return `this database has no column for that setting yet — run ${file}.`;
     case '23514': // check_violation
-      return "the database rejected that value — its allowed list is out of date. Run supabase_schema_phase5.sql.";
+      return `the database rejected that value — its allowed list is out of date. Run ${file}.`;
     case '23502': // not_null_violation
       return 'the database will not accept an empty value for that setting.';
     case 'PGRST116': // no row matched the filter
@@ -144,7 +184,7 @@ export async function PATCH(req: NextRequest) {
     // "run the migration" — a rejected write here is otherwise invisible to the
     // user as a setting that silently snaps back to its old value.
     console.error('[users:PATCH]', dbError.code, dbError.message, Object.keys(updates).join(','));
-    return apiError(saveFailureReason(dbError), 500);
+    return apiError(saveFailureReason(dbError, Object.keys(updates)), 500);
   }
   return NextResponse.json(data);
 }

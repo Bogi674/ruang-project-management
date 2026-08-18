@@ -57,7 +57,21 @@ export const viewport: Viewport = {
  */
 const CORE_PREFERENCE_COLUMNS =
   'accent_color, typography_preference, surface_preference, density_preference, landing_page_preference, theme_preference';
-const PREFERENCE_COLUMNS = `${CORE_PREFERENCE_COLUMNS}, app_background_preference, background_tint_preference`;
+const APPEARANCE_PREFERENCE_COLUMNS = `${CORE_PREFERENCE_COLUMNS}, app_background_preference, background_tint_preference`;
+const TODO_PREFERENCE_COLUMNS =
+  'todo_default_assignment, todo_done_behavior, todo_subtask_mode, todo_show_estimates, todo_show_progress, todo_today_cap, todo_rollover';
+
+/**
+ * Newest tier first. Each fallback drops the most recent migration's columns,
+ * so a database missing phase 7 still gets its appearance settings and a
+ * database missing phase 3 still gets its theme — rather than all of them
+ * failing together, which is the whole point of the tiering.
+ */
+const PREFERENCE_TIERS = [
+  `${APPEARANCE_PREFERENCE_COLUMNS}, ${TODO_PREFERENCE_COLUMNS}`,
+  APPEARANCE_PREFERENCE_COLUMNS,
+  CORE_PREFERENCE_COLUMNS,
+];
 
 /**
  * Loads the signed-in user's appearance settings.
@@ -73,27 +87,23 @@ async function loadPreferences(): Promise<Partial<UserPreferences> | null> {
     if (!userId) return null;
 
     const db = createServerClient();
-    const { data, error } = await db
-      .from('users')
-      .select(PREFERENCE_COLUMNS)
-      .eq('id', userId)
-      .single();
 
-    if (!error) return (data as Partial<UserPreferences>) ?? null;
+    for (let tier = 0; tier < PREFERENCE_TIERS.length; tier++) {
+      const { data, error } = await db
+        .from('users')
+        .select(PREFERENCE_TIERS[tier])
+        .eq('id', userId)
+        .single();
 
-    console.error('[layout:preferences] full select failed, retrying core columns:', error.message);
+      if (!error) return (data as Partial<UserPreferences>) ?? null;
 
-    const { data: core, error: coreError } = await db
-      .from('users')
-      .select(CORE_PREFERENCE_COLUMNS)
-      .eq('id', userId)
-      .single();
-
-    if (coreError) {
-      console.error('[layout:preferences] core select failed:', coreError.message);
-      return null;
+      const next = PREFERENCE_TIERS[tier + 1];
+      console.error(
+        `[layout:preferences] tier ${tier} select failed${next ? ', retrying with fewer columns' : ''}:`,
+        error.message
+      );
     }
-    return (core as Partial<UserPreferences>) ?? null;
+    return null;
   } catch {
     // Appearance must never be the reason a page fails to render.
     return null;

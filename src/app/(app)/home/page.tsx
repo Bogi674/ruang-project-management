@@ -6,6 +6,7 @@ import { NoteCard } from '@/components/notes/NoteCard';
 import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/types';
 import { Greeting } from '@/components/home/Greeting';
+import { HomeTodoStrip } from '@/components/todos/HomeTodoStrip';
 import { formatDate, getDayGreeting } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,11 @@ export default async function HomePage() {
         initialGreeting={getDayGreeting()}
         initialDate={today}
       />
+
+      {/* Today's to-dos, above Pinned — the first thing Home is opened for.
+          Renders nothing at all when there is neither anything due nor
+          anything done, so a quiet day stays quiet. */}
+      <HomeTodoStrip />
 
       {/* Pinned */}
       <section className="mb-8">
