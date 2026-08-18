@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { getInitials } from '@/lib/utils';
-import { usePreferences } from '@/lib/preferences';
+import { usePreferences, type PreferenceSaveError } from '@/lib/preferences';
 import { ACCENT_PRESETS, resolveTheme } from '@/lib/theme';
 
 interface SettingsClientProps {
@@ -31,6 +31,18 @@ const DENSITY_OPTIONS = [
   { value: 'compact', label: 'Compact' },
   { value: 'comfortable', label: 'Comfortable' },
   { value: 'spacious', label: 'Spacious' },
+];
+
+/** Appearance fields that render their own inline rejection notice. */
+const INLINE_ERROR_FIELDS = [
+  'accent_color',
+  'typography_preference',
+  'theme_preference',
+  'density_preference',
+  'surface_preference',
+  'app_background_preference',
+  'background_tint_preference',
+  'landing_page_preference',
 ];
 
 const LANDING_OPTIONS = [
@@ -178,14 +190,18 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
 
       {tab === 'appearance' && (
         <>
-          {/* A rejected save used to be invisible: the new look applied, then
-              came back as the old one on the next load with no explanation. */}
-          {saveError && (
+          {/* Every appearance control carries its own inline notice now, so this
+              only catches a field that somehow has no section of its own. */}
+          {saveError && !saveError.fields.some((f) => INLINE_ERROR_FIELDS.includes(f)) && (
             <p className="mb-5 text-[12.5px] text-danger bg-danger-bg border border-danger-border rounded-[10px] px-3 py-2">
-              {saveError}
+              {saveError.message}
             </p>
           )}
-          <AppearanceTab preferences={preferences} updatePreferences={updatePreferences} />
+          <AppearanceTab
+            preferences={preferences}
+            updatePreferences={updatePreferences}
+            saveError={saveError}
+          />
         </>
       )}
 
@@ -447,12 +463,33 @@ function ProfileTab({ name, email, image, isGoogleUser }: { name: string; email:
   );
 }
 
+/**
+ * The rejection notice for one section.
+ *
+ * It renders where the click happened rather than only at the top of the tab.
+ * With the message 600px above the App Background grid, a rejected save read as
+ * a selector that unselects itself — which is exactly how it was reported.
+ */
+function SaveErrorNote({ error, field }: { error: PreferenceSaveError | null; field: string }) {
+  if (!error || !error.fields.includes(field)) return null;
+  return (
+    <p
+      role="alert"
+      className="mt-3 text-[12.5px] text-danger bg-danger-bg border border-danger-border rounded-[10px] px-3 py-2"
+    >
+      {error.message}
+    </p>
+  );
+}
+
 function AppearanceTab({
   preferences,
   updatePreferences,
+  saveError,
 }: {
   preferences: ReturnType<typeof usePreferences>['preferences'];
   updatePreferences: ReturnType<typeof usePreferences>['updatePreferences'];
+  saveError: PreferenceSaveError | null;
 }) {
   return (
     <div className="space-y-8">
@@ -481,6 +518,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="theme_preference" />
       </section>
 
       {/* Accent color */}
@@ -511,6 +549,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="accent_color" />
       </section>
 
       {/* Typography */}
@@ -544,6 +583,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="typography_preference" />
       </section>
 
       {/* Density */}
@@ -569,6 +609,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="density_preference" />
       </section>
 
       {/* Note surface */}
@@ -605,6 +646,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="surface_preference" />
       </section>
 
       {/* App background graphic */}
@@ -646,6 +688,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="app_background_preference" />
       </section>
 
       {/* Page tint */}
@@ -690,6 +733,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="background_tint_preference" />
       </section>
 
       {/* Landing page */}
@@ -715,6 +759,7 @@ function AppearanceTab({
             );
           })}
         </div>
+        <SaveErrorNote error={saveError} field="landing_page_preference" />
       </section>
     </div>
   );
