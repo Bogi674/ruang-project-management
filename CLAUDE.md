@@ -151,12 +151,23 @@ notifications
 - `supabase_schema_phase4.sql` -- hardening + backfill: re-asserts every appearance
   column (phase 2 and 3 in one place), enables RLS on all eight tables, and revokes
   `anon` / `authenticated` access to the whole `public` schema
+- `supabase_schema_phase5.sql` -- **rebuilds the appearance CHECK constraints
+  unconditionally** from the value lists in `lib/theme.ts`
 
-All four files are idempotent (safe to re-run). **Phase 4 supersedes phase 3 for
-the column list** -- running it alone is enough to bring an older database up to
-date. A missing preference column is not cosmetic: PostgREST fails a `select` as
-a whole when one column in it is unknown, which made the server read *no*
-preferences and dark mode revert to light on every load.
+All five files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
+for the appearance columns and their constraints** -- running it alone is enough to
+bring an older database up to date. A missing preference column is not cosmetic:
+PostgREST fails a `select` as a whole when one column in it is unknown, which made
+the server read *no* preferences and dark mode revert to light on every load.
+
+Phases 3 and 4 guard `add constraint` with
+`if not exists (select 1 from pg_constraint where conname = ...)`. That keys on the
+constraint **name**, not on what it says, so a database that received an earlier
+draft keeps the older allowed-value list forever and every later run decides there
+is nothing to do. Phase 5 drops and recreates instead (resetting out-of-list rows to
+NULL first, since `add constraint` validates existing rows). **Any future change to
+`APP_BACKGROUND_VALUES`, `BACKGROUND_TINT_VALUES` or `THEME_VALUES` needs a matching
+drop-and-recreate migration -- an `if not exists` guard will silently skip it.**
 
 ---
 

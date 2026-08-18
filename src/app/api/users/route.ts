@@ -78,6 +78,36 @@ const EDITABLE = [
   'background_tint_preference',
 ];
 
+/**
+ * Turns a database failure into something the person in Settings can act on.
+ *
+ * These are the ways a preference write fails when the code is correct and the
+ * database has drifted: a column the app knows about that the database has not
+ * been migrated for, or a CHECK constraint whose allowed list is older than the
+ * enums in `lib/theme.ts`. Both present identically in the UI — the setting
+ * applies, then rolls back — so the reason has to travel to the client.
+ *
+ * Only the SQLSTATE travels, never the message: codes are a fixed public
+ * vocabulary, messages quote column and constraint names.
+ */
+function saveFailureReason(dbError: { code?: string; message?: string }): string {
+  switch (dbError.code) {
+    // undefined_column, and PostgREST's equivalent when the column is missing
+    // from its cached schema.
+    case '42703':
+    case 'PGRST204':
+      return 'this database has no column for that setting yet — run supabase_schema_phase5.sql.';
+    case '23514': // check_violation
+      return "the database rejected that value — its allowed list is out of date. Run supabase_schema_phase5.sql.";
+    case '23502': // not_null_violation
+      return 'the database will not accept an empty value for that setting.';
+    case 'PGRST116': // no row matched the filter
+      return 'your account record could not be found.';
+    default:
+      return `the database refused the write (${dbError.code || 'no code'}).`;
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   const { error, userId } = await requireAuth();
   if (error) return error;
@@ -108,10 +138,13 @@ export async function PATCH(req: NextRequest) {
     .select()
     .single();
 
-  // Database messages can carry schema detail; keep them server-side.
   if (dbError) {
-    console.error('[users:PATCH]', dbError.message);
-    return apiError('Could not save changes', 500);
+    // The raw message can carry schema detail, so it stays in the server log.
+    // The code does not, and it is the difference between "this is broken" and
+    // "run the migration" — a rejected write here is otherwise invisible to the
+    // user as a setting that silently snaps back to its old value.
+    console.error('[users:PATCH]', dbError.code, dbError.message, Object.keys(updates).join(','));
+    return apiError(saveFailureReason(dbError), 500);
   }
   return NextResponse.json(data);
 }

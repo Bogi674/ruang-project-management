@@ -91,11 +91,25 @@ export function applyPreferences(prefs: Partial<UserPreferences>) {
   }
 }
 
+/**
+ * A rejected save, described well enough for Settings to put the message next
+ * to the control that failed.
+ *
+ * `fields` is what makes that possible. The banner used to sit at the top of
+ * the Appearance tab while the App Background grid is ~600px further down, so
+ * a rejected write looked like a selector that unselects itself for no reason.
+ */
+export interface PreferenceSaveError {
+  message: string;
+  /** The preference keys the rejected request carried. */
+  fields: string[];
+}
+
 interface PreferencesContextType {
   preferences: UserPreferences;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
   /** Set when the last save was rejected, so settings can say so out loud. */
-  saveError: string | null;
+  saveError: PreferenceSaveError | null;
 }
 
 const PreferencesContext = createContext<PreferencesContextType>({
@@ -116,7 +130,7 @@ export function PreferencesProvider({
     ...defaultPreferences,
     ...(initialPreferences || {}),
   });
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<PreferenceSaveError | null>(null);
 
   // A ref shadows the state so the callback can be identity-stable while still
   // merging onto the newest value — settings are tapped in quick bursts and a
@@ -173,13 +187,24 @@ export function PreferencesProvider({
     applyPreferences(next);
     setSaveError(null);
 
+    // Distinguishes "the server said no" from "the request never arrived".
+    // Both roll back, but only one of them is fixed by checking your wifi.
+    let rejection: string | null = null;
+
     try {
       const res = await fetch('/api/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        rejection =
+          body && typeof (body as { error?: unknown }).error === 'string'
+            ? (body as { error: string }).error
+            : `the server returned HTTP ${res.status}.`;
+        throw new Error(rejection);
+      }
     } catch {
       /*
        * Roll back rather than leave the screen showing something the database
@@ -192,7 +217,12 @@ export function PreferencesProvider({
         setPreferences(previous);
         applyPreferences(previous);
       }
-      setSaveError("Couldn't save that setting — check your connection and try again.");
+      setSaveError({
+        message: rejection
+          ? `Couldn't save that setting — ${rejection}`
+          : "Couldn't save that setting — check your connection and try again.",
+        fields: Object.keys(updates),
+      });
     }
   }, []);
 
