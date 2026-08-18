@@ -58,6 +58,34 @@ function ToolbarDivider() {
   return <div className="w-px h-4 bg-border-default flex-shrink-0 mx-0.5 md:hidden" />;
 }
 
+/**
+ * The "Add Widget" control.
+ *
+ * Rendered twice, deliberately, because the two layouts need opposite things
+ * from it:
+ *
+ * - Desktop: it is the last item *inside* the wrapping strip, so it settles on
+ *   whichever row the tools end on instead of floating vertically centred
+ *   across both of them. It keeps a hairline separator so it still reads as
+ *   "not one of the formatting tools".
+ * - Mobile: the strip is a single horizontal scroller, so the button is pinned
+ *   outside it — otherwise it swipes out of reach behind the tools.
+ */
+function AddWidgetButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      // Same reason as ToolbarButton: never steal focus from the editor.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-3 h-7 text-12 text-text-secondary border border-border-default rounded-lg hover:bg-bg-elevated hover:border-accent-blue hover:text-accent-blue-dark transition-colors duration-120 whitespace-nowrap flex-shrink-0"
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+      {label}
+    </button>
+  );
+}
+
 interface MenuCoords {
   top: number;
   left: number;
@@ -492,20 +520,22 @@ export function FormattingToolbar({ editor, onAddWidget, position = 'bottom' }: 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>
         </ToolbarButton>
         </ToolbarGroup>
+
+        {/* Desktop: rides along in the wrap, so it lands on the tools' last
+            row rather than hovering beside both of them. */}
+        {onAddWidget && (
+          <div className="hidden md:flex items-center flex-shrink-0 ml-1">
+            <div className="w-px h-5 bg-border-default mr-2.5" />
+            <AddWidgetButton onClick={onAddWidget} label="Add Widget" />
+          </div>
+        )}
         </div>
       </div>
 
-      {/* Pinned Add button — never scrolls out of reach */}
+      {/* Mobile: pinned outside the scroller so it never swipes out of reach. */}
       {onAddWidget && (
-        <div className="flex items-center pl-1.5 pr-3 border-l border-border-default flex-shrink-0 bg-bg-base">
-          <button
-            type="button"
-            onClick={onAddWidget}
-            className="flex items-center gap-1.5 px-3 h-7 text-12 text-text-secondary border border-border-default rounded-lg hover:bg-bg-elevated hover:border-accent-blue hover:text-accent-blue-dark transition-colors duration-120 whitespace-nowrap"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
-            Add<span className="hidden md:inline">&nbsp;Widget</span>
-          </button>
+        <div className="flex md:hidden items-center pl-1.5 pr-3 border-l border-border-default flex-shrink-0 bg-bg-base">
+          <AddWidgetButton onClick={onAddWidget} label="Add" />
         </div>
       )}
     </div>

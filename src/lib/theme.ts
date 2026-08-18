@@ -111,7 +111,10 @@ export function contrastInk(hex: string): string {
 /* ── palettes ───────────────────────────────────────────────────────────── */
 
 const LIGHT_BASE = '#ffffff';
-const DARK_BASE = '#1c2130';
+// Neutral, not navy: the dark theme is a stack of pure greys (see the
+// [data-theme="dark"] block in globals.css), and everything derived from this
+// base — chip fills, glows — has to sit on that same neutral ramp.
+const DARK_BASE = '#1b1b1b';
 
 /**
  * Page canvas colours. The canvas is the surface *behind* cards — sidebar,
@@ -119,13 +122,17 @@ const DARK_BASE = '#1c2130';
  * `--bg-base`, never equal to it.
  */
 const TINTS: Record<BackgroundTintValue, { light: string; dark: string }> = {
-  neutral: { light: '#f4f7fb', dark: '#12161f' },
-  warm: { light: '#faf6ef', dark: '#1a1611' },
-  cool: { light: '#eff5fc', dark: '#101720' },
-  mint: { light: '#f0f7f2', dark: '#101a15' },
-  blush: { light: '#fbf3f5', dark: '#1b1418' },
+  // "neutral" means neutral: no hue in either theme. The warm/cool/mint/blush
+  // tints are the ones that are *meant* to be coloured, so they keep their
+  // cast — but they are pitched much closer to black than the canvas colour
+  // is in light mode, so they read as a hint rather than as a wash.
+  neutral: { light: '#f4f7fb', dark: '#0f0f0f' },
+  warm: { light: '#faf6ef', dark: '#161310' },
+  cool: { light: '#eff5fc', dark: '#0f1216' },
+  mint: { light: '#f0f7f2', dark: '#0e1310' },
+  blush: { light: '#fbf3f5', dark: '#161012' },
   // `accent` is derived from the user's accent colour at resolve time.
-  accent: { light: '#f4f7fb', dark: '#12161f' },
+  accent: { light: '#f4f7fb', dark: '#0f0f0f' },
 };
 
 /**
@@ -196,7 +203,7 @@ export function resolveTheme(prefs: Partial<UserPreferences> | null | undefined)
   const canvas =
     tint === 'accent'
       ? isDark
-        ? mix(accent, '#0d1017', 0.9)
+        ? mix(accent, '#0b0b0b', 0.9)
         : mix(accent, '#ffffff', 0.9)
       : TINTS[tint][isDark ? 'dark' : 'light'];
 
@@ -242,5 +249,5 @@ export function themeAttributes(resolved: ResolvedTheme): Record<string, string>
 
 /** The theme-colour meta value, so the mobile browser chrome matches. */
 export function browserThemeColor(resolved: ResolvedTheme): string {
-  return resolved.theme === 'dark' ? '#12161f' : '#ffffff';
+  return resolved.theme === 'dark' ? '#0f0f0f' : '#ffffff';
 }

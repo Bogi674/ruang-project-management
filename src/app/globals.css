@@ -182,22 +182,29 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --text-primary:    #dfe6f0;
-  --text-secondary:  #a4b3c4;
-  --text-muted:      #7c8b9c;
-  --text-faint:      #5b6a7b;
-  --heading-color:   #f2f6fb;
-  --editor-ink:      #ccd7e4;
+  /*
+   * The greys are neutral — r = g = b, no hue at all. An earlier pass tinted
+   * them navy, which read as "a blue app with the lights off" rather than as a
+   * dark theme, and fought every accent the user could pick. Colour in dark
+   * mode now comes only from the accent and the semantic chips; everything
+   * structural is a shade of black.
+   */
+  --text-primary:    #e6e6e6;
+  --text-secondary:  #a8a8a8;
+  --text-muted:      #8a8a8a;
+  --text-faint:      #6b6b6b;
+  --heading-color:   #f5f5f5;
+  --editor-ink:      #d0d0d0;
 
-  --bg-base:         #1c2130;
-  --bg-subtle:       #171c28;
-  --bg-surface:      #232b3b;
-  --bg-elevated:     #2b3446;
-  --bg-page:         #12161f;
+  --bg-base:         #1b1b1b;
+  --bg-subtle:       #161616;
+  --bg-surface:      #212121;
+  --bg-elevated:     #292929;
+  --bg-page:         #0f0f0f;
 
-  --border-default:  #303a4b;
-  --border-light:    #272f3e;
-  --border-medium:   #3c4859;
+  --border-default:  #2e2e2e;
+  --border-light:    #262626;
+  --border-medium:   #3d3d3d;
 
   /* Greens and ambers are re-pitched rather than dropped: the same semantic
      roles (space chips, pinned stars) need to stay recognisable but must read
@@ -207,10 +214,10 @@
   --accent-green-dark: #b6d9a6;
 
   /* accent-slate is only ever a *filled button* background, so it has to stay
-     dark enough for white text (~4.8:1) rather than drift pale. The -dark
-     variant is the hover state and therefore lightens here, not darkens. */
-  --accent-slate:      #5c6b7e;
-  --accent-slate-dark: #6f8095;
+     dark enough for white text (#565656 is ~7.3:1) rather than drift pale. The
+     -dark variant is the hover state and therefore lightens here, not darkens. */
+  --accent-slate:      #565656;
+  --accent-slate-dark: #6b6b6b;
 
   --accent-amber:      #E8B23C;
   --accent-amber-dark: #F0C978;
@@ -225,9 +232,9 @@
      inline on <html>, and inline styles win — but if that inline block is
      ever missing (a stale pre-paint cache, JS disabled) these keep the page
      dark instead of dropping back to a white canvas under dark text. */
-  --canvas-base: #12161f;
-  --canvas-glow: #26303f;
-  --accent-blue-bg: #262f40;
+  --canvas-base: #0f0f0f;
+  --canvas-glow: #272727;
+  --accent-blue-bg: #272727;
   --accent-blue-dark: #b6c6e2;
 
   --canvas-ink:  rgba(255,255,255,0.055);

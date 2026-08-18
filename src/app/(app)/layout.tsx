@@ -85,8 +85,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onShowShortcuts={() => setShowShortcuts(true)}
           />
           {!focusMode && <Sidebar width={sidebarWidth} onWidthChange={handleSidebarWidth} />}
+          {/*
+            The 52px navbar offset is PADDING, not margin.
+
+            As a margin it collapsed straight out of <main>: neither the
+            desktop wrapper nor .app-canvas establishes a block formatting
+            context (position/z-index do not), so the 52px ended up above the
+            whole min-h-screen shell. The document became 100vh + 52px tall,
+            which is the phantom scroll that dragged the app up and exposed a
+            bare strip of canvas under the fixed navbar and sidebar. Padding
+            sits inside the border box, so 52px + calc(100vh-52px) is exactly
+            100vh and the shell does not scroll at all.
+          */}
           <main
-            className="mt-[52px] min-h-[calc(100vh-52px)]"
+            className="pt-[52px] min-h-screen"
             style={{ marginLeft: focusMode ? 0 : sidebarWidth }}
           >
             <div className="animate-fadeUp">{children}</div>
