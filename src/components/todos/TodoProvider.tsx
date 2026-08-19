@@ -17,10 +17,9 @@ import {
   todayISO,
   type ResolvedTodoPreferences,
 } from '@/lib/todos';
-import type { Todo, TodoAttachment, TodoFilter, TodoGroups, TodoView } from '@/types';
+import type { Todo, TodoAttachment, TodoFilter, TodoGroups } from '@/types';
 
 const FILTER_KEY = 'ruang_todo_filter';
-const VIEW_KEY = 'ruang_todo_view';
 /** How long a completed row can be pulled back out of Done. */
 export const UNDO_WINDOW_MS = 3000;
 
@@ -31,18 +30,18 @@ export interface UndoEntry {
   expiresAt: number;
 }
 
-interface TodoContextValue {
-  /** Flat, including sub-tasks. Grouped views read `groups` instead. */
-  todos: Todo[];
-  groups: TodoGroups;
-  loading: boolean;
-  error: string | null;
-  filter: TodoFilter;
+/**
+ * State and actions are two contexts, not one.
+ *
+ * Every to-do row consumes this provider, and a single context meant that
+ * ticking one checkbox re-rendered every row on the page — the actions object
+ * was rebuilt on each render, so even a row whose data had not changed saw a
+ * new context value. Actions are identity-stable for the life of the provider
+ * and live on their own; rows subscribe to those alone and are `React.memo`'d
+ * against their own `todo`. Only the rows that actually changed re-render.
+ */
+interface TodoActions {
   setFilter: (next: TodoFilter) => void;
-  view: TodoView;
-  setView: (next: TodoView) => void;
-  prefs: ResolvedTodoPreferences;
-  spaceFilter: string | null;
   setSpaceFilter: (id: string | null) => void;
 
   createTodo: (input: Partial<Todo> & { title: string }) => Promise<Todo | null>;
@@ -53,24 +52,51 @@ interface TodoContextValue {
   attach: (todoId: string, body: Record<string, unknown>) => Promise<TodoAttachment | null>;
   detach: (todoId: string, attachmentId: string) => Promise<void>;
 
-  openTodoId: string | null;
   setOpenTodoId: (id: string | null) => void;
-  undo: UndoEntry | null;
   runUndo: () => void;
   dismissUndo: () => void;
 
   refresh: () => void;
   /** Announces to the live region — "Marked done", "Moved to Wednesday 19". */
   announce: (message: string) => void;
+  prefs: ResolvedTodoPreferences;
+}
+
+interface TodoState {
+  /** Flat, including sub-tasks. Grouped views read `groups` instead. */
+  todos: Todo[];
+  groups: TodoGroups;
+  loading: boolean;
+  error: string | null;
+  filter: TodoFilter;
+  spaceFilter: string | null;
+  openTodoId: string | null;
+  undo: UndoEntry | null;
   liveMessage: string;
 }
 
-const TodoContext = createContext<TodoContextValue | null>(null);
+export type TodoContextValue = TodoState & TodoActions;
 
+const TodoStateContext = createContext<TodoState | null>(null);
+const TodoActionsContext = createContext<TodoActions | null>(null);
+
+/** Everything. For the screens that render lists — not for a single row. */
 export function useTodos(): TodoContextValue {
-  const ctx = useContext(TodoContext);
-  if (!ctx) throw new Error('useTodos must be used inside a TodoProvider');
-  return ctx;
+  const state = useContext(TodoStateContext);
+  const actions = useContext(TodoActionsContext);
+  if (!state || !actions) throw new Error('useTodos must be used inside a TodoProvider');
+  return useMemo(() => ({ ...state, ...actions }), [state, actions]);
+}
+
+/**
+ * Actions and preferences only, with a context value that never changes
+ * identity. This is what a row should use: it can then be memoised and will
+ * re-render only when its own to-do does.
+ */
+export function useTodoActions(): TodoActions {
+  const actions = useContext(TodoActionsContext);
+  if (!actions) throw new Error('useTodoActions must be used inside a TodoProvider');
+  return actions;
 }
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -124,7 +150,6 @@ export function TodoProvider({
   const [loading, setLoading] = useState(!initialGroups);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilterState] = useState<TodoFilter>(initialFilter ?? 'today');
-  const [view, setViewState] = useState<TodoView>('list');
   const [spaceFilter, setSpaceFilter] = useState<string | null>(null);
   const [openTodoId, setOpenTodoId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
@@ -143,37 +168,31 @@ export function TodoProvider({
   }, []);
 
   /*
-   * The filter and view are restored from localStorage in an effect rather
-   * than in the useState initialiser: the server renders the default and a
-   * mismatched first client render is a hydration error.
+   * The filter is restored from localStorage in an effect rather than in the
+   * useState initialiser: the server renders the default and a mismatched
+   * first client render is a hydration error.
    */
   useEffect(() => {
     if (!initialFilter) {
       setFilterState(readStored<TodoFilter>(FILTER_KEY, ['today', 'week', 'month', 'all'], 'today'));
     }
-    setViewState(readStored<TodoView>(VIEW_KEY, ['list', 'calendar'], 'list'));
   }, [initialFilter]);
 
-  const setFilter = useCallback(
-    (next: TodoFilter) => {
-      setFilterState(next);
-      try {
-        window.localStorage.setItem(FILTER_KEY, next);
-      } catch {
-        /* private mode — the filter just does not persist */
-      }
-    },
-    []
-  );
-
-  const setView = useCallback((next: TodoView) => {
-    setViewState(next);
+  const setFilter = useCallback((next: TodoFilter) => {
+    setFilterState(next);
     try {
-      window.localStorage.setItem(VIEW_KEY, next);
+      window.localStorage.setItem(FILTER_KEY, next);
     } catch {
-      /* private mode */
+      /* private mode — the filter just does not persist */
     }
   }, []);
+
+  /*
+   * There is no `view` here any more. /todo used to switch between a list and
+   * a month grid of its own; the grid moved to /calendar, which is the app's
+   * only calendar. The filter bar links there rather than swapping this page's
+   * contents out from under the same URL.
+   */
 
   /* ── Loading ───────────────────────────────────────────────────────────── */
 
@@ -220,6 +239,15 @@ export function TodoProvider({
 
   /* ── Grouping ──────────────────────────────────────────────────────────── */
 
+  /*
+   * Nesting sub-tasks onto their parents produces a new object per parent, and
+   * a new object means every memoised row downstream re-renders even when its
+   * to-do is untouched. This cache hands back the previous object whenever the
+   * parent row and its sub-task rows are the same references as last time, so
+   * a change to one to-do invalidates exactly one row.
+   */
+  const parentCache = useRef(new Map<string, { source: Todo; subs: Todo[]; out: Todo }>());
+
   const groups = useMemo<TodoGroups>(() => {
     const today = todayISO();
     const byParent = new Map<string, Todo[]>();
@@ -230,7 +258,30 @@ export function TodoProvider({
       byParent.set(todo.parent_id, list);
     }
 
-    const next: TodoGroups = {
+    const cache = parentCache.current;
+    const next = new Map<string, { source: Todo; subs: Todo[]; out: Todo }>();
+
+    const parents = todos
+      .filter((t) => !t.parent_id)
+      .map((t) => {
+        const subs = sortByPosition(byParent.get(t.id) || []);
+        const cachedEntry = cache.get(t.id);
+        const reusable =
+          cachedEntry &&
+          cachedEntry.source === t &&
+          cachedEntry.subs.length === subs.length &&
+          cachedEntry.subs.every((sub, i) => sub === subs[i]);
+
+        const entry = reusable
+          ? cachedEntry!
+          : { source: t, subs, out: { ...t, subtasks: subs } as Todo };
+        next.set(t.id, entry);
+        return entry.out;
+      });
+
+    parentCache.current = next;
+
+    const grouped: TodoGroups = {
       overdue: [],
       dated: {},
       unassigned: [],
@@ -238,41 +289,49 @@ export function TodoProvider({
       counts,
     };
 
-    const parents = todos
-      .filter((t) => !t.parent_id)
-      .map((t) => ({ ...t, subtasks: sortByPosition(byParent.get(t.id) || []) }));
-
     for (const todo of sortByPosition(parents)) {
       if (todo.is_completed) {
         const key = todo.due_date || '';
-        (next.done[key] = next.done[key] || []).push(todo);
+        (grouped.done[key] = grouped.done[key] || []).push(todo);
       } else if (!todo.due_date) {
-        next.unassigned.push(todo);
+        grouped.unassigned.push(todo);
       } else if (todo.due_date < today) {
-        next.overdue.push(todo);
+        grouped.overdue.push(todo);
       } else {
-        (next.dated[todo.due_date] = next.dated[todo.due_date] || []).push(todo);
+        (grouped.dated[todo.due_date] = grouped.dated[todo.due_date] || []).push(todo);
       }
     }
-    return next;
+    return grouped;
   }, [todos, counts]);
 
   /* ── Mutations ─────────────────────────────────────────────────────────── */
 
   /**
-   * Counts come from the server, so an optimistic completion would leave the
-   * header reading "4 to go" while four rows show. Rather than recompute them
-   * from a window that does not contain every to-do, the totals are nudged
-   * locally and reconciled by a debounced background refetch.
+   * Reconcile the headline numbers after a local change.
+   *
+   * This used to refetch the whole window 1.5 seconds after every mutation,
+   * which is what made the page feel like it was fighting the user: a second
+   * change landing inside that window was overwritten by the in-flight reload,
+   * so a tick or a drag would visibly undo itself. Only the counts come from
+   * outside the current window, so only the counts are refetched — one small
+   * request, and the rows on screen are never replaced.
    */
   const resyncTimer = useRef<number | null>(null);
   const scheduleResync = useCallback(() => {
-    // Tells the sidebar badge to recount straight away; the local refetch that
-    // reconciles this page's own totals can wait out the debounce.
+    // Tells the sidebar badge to recount straight away.
     emitTodosChanged();
     if (resyncTimer.current) window.clearTimeout(resyncTimer.current);
-    resyncTimer.current = window.setTimeout(() => refresh(), 1500);
-  }, [refresh]);
+    resyncTimer.current = window.setTimeout(() => {
+      fetch('/api/todos?count=true')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((next: TodoGroups['counts'] | null) => {
+          if (next) setCounts(next);
+        })
+        .catch(() => {
+          /* The numbers stay as the optimistic maths left them. */
+        });
+    }, 1200);
+  }, []);
 
   useEffect(() => () => {
     if (resyncTimer.current) window.clearTimeout(resyncTimer.current);
@@ -339,12 +398,14 @@ export function TodoProvider({
 
         setTodos((current) => {
           const next = current.map((t) => {
-            if (t.id === id) return { ...t, ...saved };
+            // `saved` is the light shape — it carries no attachments, so the
+            // ones already on the row are kept rather than merged away.
+            if (t.id === id) return { ...t, ...saved, attachments: t.attachments };
             if (parent && t.id === parent.id) return { ...t, ...parent };
             return t;
           });
           // A generated instance may fall outside the current filter's window;
-          // the debounced resync drops it again if so.
+          // it is harmless there and the next real load drops it.
           return generated && !next.some((t) => t.id === generated.id)
             ? [...next, generated]
             : next;
@@ -372,6 +433,11 @@ export function TodoProvider({
         setUndo({ todoId: id, title: todo.title, previous: todo, expiresAt: Date.now() + UNDO_WINDOW_MS });
       }
 
+      // Nudged before the request rather than after it, so the header count
+      // moves with the checkbox instead of a round trip later.
+      setCounts((c) => ({ ...c, total: Math.max(0, c.total + (next ? -1 : 1)) }));
+      announce(next ? `Marked ${todo.title} done` : `Reopened ${todo.title}`);
+
       const ok = await updateTodo(id, {
         is_completed: next,
         // Mirrors what the server stamps, so the "done at 08:10" caption is
@@ -379,18 +445,23 @@ export function TodoProvider({
         completed_at: next ? new Date().toISOString() : null,
       });
 
-      if (ok) {
-        setCounts((c) => ({ ...c, total: Math.max(0, c.total + (next ? -1 : 1)) }));
-        announce(next ? `Marked ${todo.title} done` : `Reopened ${todo.title}`);
-        scheduleResync();
-      }
+      if (ok) scheduleResync();
+      else setCounts((c) => ({ ...c, total: Math.max(0, c.total + (next ? 1 : -1)) }));
     },
     [announce, prefs.doneBehavior, scheduleResync, updateTodo]
   );
 
+  /*
+   * `undo` is shadowed by a ref so this callback can stay identity-stable
+   * without reading it inside a state updater — React may run an updater twice
+   * in development, and the PATCH would go out twice with it.
+   */
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
+
   const runUndo = useCallback(() => {
-    if (!undo) return;
-    const entry = undo;
+    const entry = undoRef.current;
+    if (!entry) return;
     setUndo(null);
     updateTodo(entry.todoId, { is_completed: false, completed_at: null }).then((ok) => {
       if (ok) {
@@ -398,7 +469,7 @@ export function TodoProvider({
         announce(`Reopened ${entry.title}`);
       }
     });
-  }, [announce, undo, updateTodo]);
+  }, [announce, updateTodo]);
 
   const dismissUndo = useCallback(() => setUndo(null), []);
 
@@ -414,32 +485,48 @@ export function TodoProvider({
       const todo = previous.find((t) => t.id === id);
       // Sub-tasks cascade in the database, so they go from the list too.
       setTodos((current) => current.filter((t) => t.id !== id && t.parent_id !== id));
+      setOpenTodoId((open) => (open === id ? null : open));
 
       try {
         const res = await fetch(`/api/todos/${id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error();
         if (todo) announce(`Deleted ${todo.title}`);
-        if (openTodoId === id) setOpenTodoId(null);
         scheduleResync();
       } catch {
         setTodos(previous);
         setError('Could not delete that to-do');
       }
     },
-    [announce, openTodoId, scheduleResync]
+    [announce, scheduleResync]
   );
 
   /**
-   * Persist an order change.
+   * Persist an order change — and apply it on screen first.
    *
-   * The rows have already moved on screen — the caller reorders state before
-   * calling this, because waiting for a round trip makes a drag feel broken.
+   * This is the whole reason a drag used to look broken: the rows were left
+   * where they started until something else happened to reload the page, so a
+   * drop across dates appeared to do nothing at all and then jumped minutes
+   * later. The new positions (and the new `due_date`, when the drop crossed
+   * groups) go into local state immediately; the request is what confirms it.
+   *
    * A rejection reloads from the server rather than trying to reverse the
    * drag, since a partial failure leaves no single previous order to restore.
    */
   const reorder = useCallback(
     async (entries: { id: string; position: number; due_date?: string | null }[]) => {
       if (entries.length === 0) return;
+
+      const patch = new Map(entries.map((e) => [e.id, e]));
+      setTodos((current) =>
+        current.map((t) => {
+          const entry = patch.get(t.id);
+          if (!entry) return t;
+          return 'due_date' in entry
+            ? { ...t, position: entry.position, due_date: entry.due_date ?? null }
+            : { ...t, position: entry.position };
+        })
+      );
+
       try {
         const res = await fetch('/api/todos/reorder', {
           method: 'PATCH',
@@ -449,12 +536,13 @@ export function TodoProvider({
         if (!res.ok) throw new Error();
         const body = (await res.json()) as { updated: number; requested: number };
         if (body.updated !== body.requested) refresh();
+        else scheduleResync();
       } catch {
         setError('Could not save the new order');
         refresh();
       }
     },
-    [refresh]
+    [refresh, scheduleResync]
   );
 
   const attach = useCallback(
@@ -504,44 +592,59 @@ export function TodoProvider({
     }
   }, []);
 
-  const value: TodoContextValue = {
-    todos,
-    groups,
-    loading,
-    error,
-    filter,
-    setFilter,
-    view,
-    setView,
-    prefs,
-    spaceFilter,
-    setSpaceFilter,
-    createTodo,
-    updateTodo,
-    toggleComplete,
-    deleteTodo,
-    reorder,
-    attach,
-    detach,
-    openTodoId,
-    setOpenTodoId,
-    undo,
-    runUndo,
-    dismissUndo,
-    refresh,
-    announce,
-    liveMessage,
-  };
+  const actions = useMemo<TodoActions>(
+    () => ({
+      setFilter,
+      setSpaceFilter,
+      createTodo,
+      updateTodo,
+      toggleComplete,
+      deleteTodo,
+      reorder,
+      attach,
+      detach,
+      setOpenTodoId,
+      runUndo,
+      dismissUndo,
+      refresh,
+      announce,
+      prefs,
+    }),
+    [
+      announce,
+      attach,
+      createTodo,
+      deleteTodo,
+      detach,
+      dismissUndo,
+      prefs,
+      refresh,
+      reorder,
+      runUndo,
+      setFilter,
+      toggleComplete,
+      updateTodo,
+    ]
+  );
 
-  return <TodoContext.Provider value={value}>{children}</TodoContext.Provider>;
-}
+  const state = useMemo<TodoState>(
+    () => ({
+      todos,
+      groups,
+      loading,
+      error,
+      filter,
+      spaceFilter,
+      openTodoId,
+      undo,
+      liveMessage,
+    }),
+    [todos, groups, loading, error, filter, spaceFilter, openTodoId, undo, liveMessage]
+  );
 
-/** Exposed so Settings can write the to-do preference columns. */
-export function useTodoPreferences() {
-  const { preferences, updatePreferences, saveError } = usePreferences();
-  return {
-    prefs: resolveTodoPreferences(preferences as unknown as Record<string, unknown>),
-    update: updatePreferences,
-    saveError,
-  };
+  return (
+    <TodoActionsContext.Provider value={actions}>
+      <TodoStateContext.Provider value={state}>{children}</TodoStateContext.Provider>
+    </TodoActionsContext.Provider>
+  );
 }

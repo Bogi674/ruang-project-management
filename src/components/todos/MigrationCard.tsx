@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { TodoCheckbox } from './TodoCheckbox';
-import { useTodos } from './TodoProvider';
+import { useTodoActions } from './TodoProvider';
 
 const DISMISSED_KEY = 'ruang_todo_migration_dismissed';
 
@@ -24,7 +24,7 @@ interface Candidate {
  * The note itself is never deleted — each created to-do links back to it.
  */
 export function MigrationCard() {
-  const { refresh, announce } = useTodos();
+  const { refresh, announce } = useTodoActions();
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);

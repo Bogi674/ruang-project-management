@@ -5,10 +5,10 @@ import { ownsSpace, isUuid } from '@/lib/ownership';
 import { collectTodoFields } from '@/lib/todoPayload';
 import { nextOccurrenceFrom } from '@/lib/recurrence';
 import { todayISO } from '@/lib/todos';
+import { TODO_SELECT, TODO_SELECT_LIGHT } from '@/lib/todoQuery';
 import type { Todo } from '@/types';
 
-const SELECT =
-  '*, space:spaces(*), attachments:todo_attachments(*, file:files(*), note:notes(id, title, updated_at))';
+const SELECT = TODO_SELECT;
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { error, userId } = await requireAuth();
@@ -52,6 +52,39 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const updates = collected.updates;
 
   const db = createServerClient();
+
+  /*
+   * The fast path.
+   *
+   * Renaming a to-do, moving it to another day, setting an estimate — none of
+   * those touch the rules below, and they are what the UI fires on nearly
+   * every interaction. Sending them as a single UPDATE ... RETURNING takes the
+   * request from four statements to one; the `user_id` filter on the UPDATE is
+   * what proves ownership, so the SELECT that used to prove it first is not
+   * doing any work the write does not already do.
+   *
+   * The heavy read is skipped too: a PATCH cannot change what is attached to a
+   * to-do, so the client keeps the attachments it already has.
+   */
+  const needsRules = 'is_completed' in body || 'space_id' in body;
+  if (!needsRules) {
+    if (Object.keys(updates).length === 0) return apiError('Nothing to update', 400);
+
+    const { data, error: fastError } = await db
+      .from('todos')
+      .update(updates)
+      .eq('id', params.id)
+      .eq('user_id', userId!)
+      .select(TODO_SELECT_LIGHT)
+      .maybeSingle();
+
+    if (fastError) {
+      console.error('[todos:PATCH]', fastError.code, fastError.message);
+      return apiError('Could not save the to-do', 500);
+    }
+    if (!data) return apiError('Not found', 404);
+    return NextResponse.json(data);
+  }
 
   const { data: existing } = await db
     .from('todos')
@@ -110,7 +143,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .update(updates)
     .eq('id', params.id)
     .eq('user_id', userId!)
-    .select(SELECT)
+    // Light, for the same reason as the fast path above: a PATCH never
+    // changes the attachment list, and re-serialising it on every checkbox
+    // was the most expensive part of the response.
+    .select(TODO_SELECT_LIGHT)
     .single();
 
   if (dbError || !data) {
@@ -130,7 +166,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   // Completing a repeating to-do is what produces the next one.
-  const generated = completing ? await generateNextOccurrence(db, userId!, data as Todo) : null;
+  const generated = completing
+    ? await generateNextOccurrence(db, userId!, data as unknown as Todo)
+    : null;
 
   return NextResponse.json({
     ...data,

@@ -3,7 +3,7 @@ import { requireAuth, apiError } from '@/lib/api-helpers';
 import { createServerClient } from '@/lib/supabase';
 import { ownsSpace, isUuid } from '@/lib/ownership';
 import { collectTodoFields } from '@/lib/todoPayload';
-import { loadTodoCounts, loadTodoGroups, TODO_SELECT } from '@/lib/todoQuery';
+import { loadTodoCounts, loadTodoGroups, TODO_SELECT_LIGHT } from '@/lib/todoQuery';
 import { POSITION_STEP } from '@/lib/todos';
 import type { TodoFilter } from '@/types';
 
@@ -99,7 +99,9 @@ export async function POST(req: NextRequest) {
   const { data, error: dbError } = await db
     .from('todos')
     .insert({ ...insert, user_id: userId! })
-    .select(TODO_SELECT)
+    // A to-do that has just been created has nothing attached to it, so the
+    // attachment embed would cost a join to return an empty array.
+    .select(TODO_SELECT_LIGHT)
     .single();
 
   if (dbError || !data) {

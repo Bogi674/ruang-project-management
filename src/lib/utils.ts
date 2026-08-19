@@ -1,9 +1,10 @@
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+/*
+ * No `cn()` here any more. It existed for the shadcn/ui components, which this
+ * app never adopted — every surface is hand-written Tailwind against the CSS
+ * custom properties in globals.css (rule 9). Removing the twelve unused
+ * components took `clsx`, `tailwind-merge`, `class-variance-authority` and
+ * every `@radix-ui/*` package out of the bundle with it.
+ */
 
 export function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);

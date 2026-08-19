@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { addDays } from 'date-fns';
 import { toISODate, todayISO } from '@/lib/todos';
 import { CalendarIcon, ClockIcon } from './icons';
-import { useTodos } from './TodoProvider';
+import { useTodoActions } from './TodoProvider';
 
 /**
  * The mobile quick-add bottom sheet.
@@ -16,7 +16,7 @@ import { useTodos } from './TodoProvider';
  * is that a to-do can be filed one-handed without opening the detail screen.
  */
 export function MobileQuickAddSheet({ onClose }: { onClose: () => void }) {
-  const { createTodo, prefs } = useTodos();
+  const { createTodo, prefs } = useTodoActions();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState<string | null>(

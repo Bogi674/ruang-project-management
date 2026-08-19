@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Note, Todo } from '@/types';
 import { AnchoredPanel, PanelLabel } from '../AnchoredPanel';
 import { NoteIcon, SearchIcon } from '../icons';
-import { useTodos } from '../TodoProvider';
+import { useTodoActions } from '../TodoProvider';
 
 /**
  * Attach popover.
@@ -25,7 +25,7 @@ export function AttachPopover({
   onClose: () => void;
   todo: Todo;
 }) {
-  const { attach } = useTodos();
+  const { attach } = useTodoActions();
   const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [query, setQuery] = useState('');
