@@ -453,13 +453,17 @@ function DaySection({
   const open: Todo[] = groups.dated[day] || [];
   const done: Todo[] = groups.done[day] || [];
 
+  // In period views (week/month) done items appear inline with strikethrough
+  // rather than in a separate collapsible "Done" section — the day is already
+  // a small unit and a second header inside it adds hierarchy without meaning.
   return (
     <TodoGroup
       groupKey={day}
       title={formatDayLabel(day, today)}
       tone={day === today ? 'today' : 'default'}
-      todos={open}
-      done={done}
+      todos={[...open, ...done]}
+      done={[]}
+      showDone={false}
       compact
       quiet={dense && open.length === 0 && done.length === 0}
       addRow={{ dueDate: day, label: `Add to ${formatDayLabel(day, today)}` }}
