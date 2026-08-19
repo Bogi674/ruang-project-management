@@ -30,6 +30,7 @@ export interface UserPreferences {
   density_preference: string | null;
   landing_page_preference: string | null;
   theme_preference: string | null;
+  color_scheme: string | null;
   app_background_preference: string | null;
   background_tint_preference: string | null;
   todo_default_assignment: string | null;
@@ -48,6 +49,7 @@ export const defaultPreferences: UserPreferences = {
   density_preference: null,
   landing_page_preference: null,
   theme_preference: null,
+  color_scheme: null,
   app_background_preference: null,
   background_tint_preference: null,
   todo_default_assignment: null,
@@ -67,6 +69,92 @@ export const ACCENT_PRESETS = [
   { label: 'Plum', value: '#9b7ec8' },
   { label: 'Slate', value: '#738290' },
 ];
+
+/**
+ * Colour schemes.
+ *
+ * A scheme is the accent *and* the three semantic colours that go with it —
+ * done, carried over, destructive. It deliberately stops there: page, surface,
+ * border and text colours are untouched, so every scheme still reads as the
+ * same calm sheet of paper and only the signals on it change colour. Repainting
+ * the canvas as well was considered and rejected; it would also collide with
+ * the Page tint setting, which already owns that surface.
+ *
+ * `calm` is the shipped palette and emits nothing at all — the values in
+ * globals.css stand untouched, so the default look cannot drift as this table
+ * is edited.
+ *
+ * Each colour here is the saturated *base*. The light and dark variants of the
+ * fills and inks are derived per theme in `resolveTheme`, the same way the
+ * accent's are, which is what keeps a vivid scheme legible on a dark page
+ * instead of leaving pale washes on it.
+ */
+export interface ColorScheme {
+  value: string;
+  label: string;
+  description: string;
+  /** null on `calm`: the accent stays whatever the accent picker says. */
+  accent: string | null;
+  /** Done, ticked, positive counts. */
+  green: string | null;
+  /** Carried over, waiting, attention without alarm. */
+  amber: string | null;
+  /** Destructive actions only. */
+  danger: string | null;
+}
+
+export const COLOR_SCHEMES: ColorScheme[] = [
+  {
+    value: 'calm',
+    label: 'Ruang Calm',
+    description: 'The original. Muted, editorial, quiet.',
+    accent: null,
+    green: null,
+    amber: null,
+    danger: null,
+  },
+  {
+    value: 'indigo',
+    label: 'Electric Indigo',
+    description: 'Vivid indigo with a cyan done state. Crisp in both themes.',
+    accent: '#6366F1',
+    green: '#06B6D4',
+    amber: '#F59E0B',
+    danger: '#F43F5E',
+  },
+  {
+    value: 'citrus',
+    label: 'Citrus',
+    description: 'Warm orange and lime. The loudest of the four.',
+    accent: '#F97316',
+    green: '#84CC16',
+    // Yellow rather than amber: the accent is already orange, and carried-over
+    // has to stay tellable apart from an ordinary accent chip at a glance.
+    amber: '#EAB308',
+    danger: '#DC2626',
+  },
+  {
+    value: 'emerald',
+    label: 'Emerald',
+    description: 'Saturated green and teal. Vivid but easy over long sessions.',
+    accent: '#10B981',
+    // Teal rather than another green, for the same separation reason as citrus.
+    green: '#14B8A6',
+    amber: '#F59E0B',
+    danger: '#F43F5E',
+  },
+  {
+    value: 'dusk',
+    label: 'Neon Dusk',
+    description: 'Magenta and violet. Built dark-first; softer in light mode.',
+    accent: '#EC4899',
+    green: '#A855F7',
+    amber: '#FB923C',
+    danger: '#EF4444',
+  },
+];
+
+export const COLOR_SCHEME_VALUES = COLOR_SCHEMES.map((s) => s.value) as readonly string[];
 
 export const THEME_VALUES = ['light', 'dark'] as const;
 export const TYPOGRAPHY_VALUES = ['sans', 'serif'] as const;
@@ -89,6 +177,7 @@ export const PREFERENCE_ENUMS: Record<string, readonly string[]> = {
   landing_page_preference: LANDING_VALUES,
   app_background_preference: APP_BACKGROUND_VALUES,
   background_tint_preference: BACKGROUND_TINT_VALUES,
+  color_scheme: COLOR_SCHEME_VALUES,
 };
 
 export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -187,6 +276,7 @@ export interface ResolvedTheme {
   landing: (typeof LANDING_VALUES)[number];
   appBackground: AppBackgroundValue;
   tint: BackgroundTintValue;
+  scheme: string;
   accent: string;
   /** CSS custom properties to set on `<html>`. */
   vars: Record<string, string>;
@@ -205,8 +295,22 @@ export function resolveTheme(prefs: Partial<UserPreferences> | null | undefined)
   const appBackground = normalize(p.app_background_preference, APP_BACKGROUND_VALUES, 'plain');
   const tint = normalize(p.background_tint_preference, BACKGROUND_TINT_VALUES, 'neutral');
 
+  const scheme =
+    COLOR_SCHEMES.find((s) => s.value === p.color_scheme) ?? COLOR_SCHEMES[0];
+
+  /*
+   * The accent picker still wins over the scheme's own accent.
+   *
+   * A scheme supplies an accent, but an explicit `accent_color` is a choice the
+   * user made about this exact colour and a scheme change must not silently
+   * throw it away. Settings clears the column when a scheme is picked, so
+   * choosing a scheme does move the accent — it just does it by saying so,
+   * rather than by having the resolver ignore a stored value.
+   */
   const accent =
-    p.accent_color && HEX_COLOR.test(p.accent_color) ? p.accent_color : ACCENT_PRESETS[0].value;
+    p.accent_color && HEX_COLOR.test(p.accent_color)
+      ? p.accent_color
+      : scheme.accent ?? ACCENT_PRESETS[0].value;
 
   const isDark = theme === 'dark';
 
@@ -250,11 +354,73 @@ export function resolveTheme(prefs: Partial<UserPreferences> | null | undefined)
     '--shadow-fab-hover': `0 8px 28px ${isDark ? 'rgba(0,0,0,.6)' : 'rgba(44,56,72,.24)'}`,
   };
 
+  /*
+   * Semantic colours, derived per theme from the scheme's saturated bases.
+   *
+   * Nothing is emitted for `calm`: the globals.css values stand as written, so
+   * the default palette is exactly what it has always been and cannot drift as
+   * this table is edited.
+   */
+  if (scheme.green) Object.assign(vars, greenVars(scheme.green, isDark));
+  if (scheme.amber) Object.assign(vars, amberVars(scheme.amber, isDark));
+  if (scheme.danger) Object.assign(vars, dangerVars(scheme.danger, isDark));
+
   // Native form controls, scrollbars and autofill follow `color-scheme`,
   // which is set from `[data-theme]` in globals.css rather than here — it is
   // a real CSS property, not a custom one, so it cannot ride in this map.
 
-  return { theme, typography, density, surface, landing, appBackground, tint, accent, vars };
+  return {
+    theme,
+    typography,
+    density,
+    surface,
+    landing,
+    appBackground,
+    tint,
+    scheme: scheme.value,
+    accent,
+    vars,
+  };
+}
+
+/*
+ * The three semantic families.
+ *
+ * Each follows the same shape as the accent's derivatives: a wash toward white
+ * in light mode and toward the dark base in dark mode, with the ink darkened or
+ * lightened to match. Written out per family rather than through one generic
+ * helper because the ratios genuinely differ — a danger fill has to stay
+ * quieter than an amber one, which sits behind a whole panel.
+ */
+function greenVars(base: string, isDark: boolean): Record<string, string> {
+  return {
+    '--accent-green': isDark ? mix(base, DARK_BASE, 0.74) : mix(base, LIGHT_BASE, 0.8),
+    '--accent-green-mid': isDark ? mix(base, DARK_BASE, 0.48) : mix(base, LIGHT_BASE, 0.52),
+    '--accent-green-dark': isDark ? mix(base, '#ffffff', 0.44) : mix(base, '#000000', 0.42),
+    // Drawn on a *filled* green surface (the checkbox tick), so it has to be
+    // chosen for contrast rather than derived by mixing.
+    '--accent-green-ink': contrastInk(base),
+    '--accent-green-solid': base,
+  };
+}
+
+function amberVars(base: string, isDark: boolean): Record<string, string> {
+  return {
+    '--accent-amber': base,
+    '--accent-amber-dark': isDark ? mix(base, '#ffffff', 0.46) : mix(base, '#000000', 0.44),
+    '--accent-amber-bg': isDark ? mix(base, DARK_BASE, 0.82) : mix(base, LIGHT_BASE, 0.86),
+    // The hairline around the carried-over panel and its chips.
+    '--accent-amber-border': isDark ? mix(base, DARK_BASE, 0.6) : mix(base, LIGHT_BASE, 0.62),
+  };
+}
+
+function dangerVars(base: string, isDark: boolean): Record<string, string> {
+  return {
+    '--danger': base,
+    '--danger-dark': isDark ? mix(base, '#ffffff', 0.3) : mix(base, '#000000', 0.22),
+    '--danger-bg': isDark ? mix(base, DARK_BASE, 0.85) : mix(base, LIGHT_BASE, 0.9),
+    '--danger-border': isDark ? mix(base, DARK_BASE, 0.62) : mix(base, LIGHT_BASE, 0.66),
+  };
 }
 
 /** `data-*` attributes that drive the CSS rules in globals.css. */

@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_DUE_TIME, parseQuickAdd, todayISO, type ParsedQuickAdd } from '@/lib/todos';
+import { parseQuickAdd, todayISO, type ParsedQuickAdd } from '@/lib/todos';
 import { useTodoActions } from './TodoProvider';
 import { CloseIcon, PlusIcon } from './icons';
 
 interface QuickAddProps {
   /**
    * The date a to-do created here lands on. `undefined` means "let the user's
-   * setting decide"; `null` means explicitly unassigned (the Unassigned
-   * column); a date string pre-dates it (an inline row inside a date group).
+   * setting decide"; `null` means explicitly undated (the Anytime column);
+   * a date string pre-dates it (an inline row inside a date group).
    */
   dueDate?: string | null;
   spaceId?: string | null;
@@ -69,7 +69,7 @@ export function QuickAdd({
     const use = (kind: 'date' | 'time' | 'estimate') =>
       parsed.matches.some((m) => m.kind === kind) && !dismissed.includes(kind);
 
-    // Explicit `null` (the Unassigned column) is honoured; `undefined` falls
+    // Explicit `null` (the Anytime column) is honoured; `undefined` falls
     // back to the user's "new to-dos land on" setting.
     const resolvedDate = use('date')
       ? parsed.due_date
@@ -79,19 +79,9 @@ export function QuickAdd({
       ? todayISO()
       : null;
 
-    /*
-     * The end-of-day default again, for the dates this component supplies
-     * rather than the ones the parser found: a to-do added to a group's inline
-     * row, or one landing on today because that is the user's setting, should
-     * behave the same as one where "today" was typed. Dismissing the time chip
-     * still wins — that is the "unless I cancel it" half of the rule.
-     */
-    const dismissedTime = dismissed.includes('time');
-    const resolvedTime = use('time')
-      ? parsed.due_time
-      : resolvedDate && !dismissedTime
-      ? DEFAULT_DUE_TIME
-      : null;
+    // A time only when one was typed. Nothing here invents one — see the note
+    // in lib/todos.ts about why the end-of-day default was rolled back.
+    const resolvedTime = use('time') ? parsed.due_time : null;
 
     setSaving(true);
     const created = await createTodo({
@@ -161,11 +151,7 @@ export function QuickAdd({
               key={chip.kind}
               type="button"
               onClick={() => setDismissed((d) => [...d, chip.kind])}
-              title={
-                chip.implied
-                  ? `Clear the ${chip.label} default — no time at all`
-                  : `Ignore “${chip.text}” and keep it in the title`
-              }
+              title={`Ignore “${chip.text}” and keep it in the title`}
               className="inline-flex items-center gap-1.5 text-11 text-accent-blue-dark bg-accent-blue-bg rounded-[5px] pl-2 pr-1.5 py-[3px] hover:opacity-80 transition-opacity duration-120"
             >
               {chip.label}
@@ -175,6 +161,53 @@ export function QuickAdd({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The "+" at the end of an empty day's single line.
+ *
+ * The same thing InlineAddRow does, at the size an empty day can afford in the
+ * Month view: collapsed to an icon until it is used, then the full inline
+ * field. Keeping it on every empty day is what makes "add this to Saturday" a
+ * click on Saturday rather than a trip through a date picker.
+ */
+export function QuietAddButton({
+  dueDate,
+  label,
+  spaceId,
+}: {
+  dueDate: string | null;
+  label: string;
+  spaceId?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (open) {
+    return (
+      <div className="flex-[3] min-w-0">
+        <QuickAdd
+          variant="inline"
+          dueDate={dueDate}
+          spaceId={spaceId}
+          placeholder={label}
+          autoFocus
+          onCreated={() => setOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-label={label}
+      title={label}
+      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-btn text-text-faint hover:text-accent-blue-dark hover:bg-accent-blue-bg transition-colors duration-120"
+    >
+      <PlusIcon size={12} />
+    </button>
   );
 }
 

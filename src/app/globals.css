@@ -53,6 +53,10 @@
     --accent-amber: #E8B23C;
     --accent-amber-dark: #A9761A;
     --accent-amber-bg: #FDF3DC;
+    /* Hairline around the carried-over panel and its chips. A colour scheme
+       derives this from its own attention colour; Ruang Calm keeps the amber
+       the panel has always used. */
+    --accent-amber-border: #fde68a;
 
     /* Readable foreground on a filled accent surface (FAB, today pill, chips).
        Recomputed per accent colour by resolveTheme(). */
@@ -63,6 +67,9 @@
        Rose, while the surface underneath it here is always --accent-green-mid
        (pale sage in light, deep green in dark) and takes white in both. */
     --accent-green-ink: #ffffff;
+    /* The saturated green itself, for a filled surface. Calm has no separate
+       solid, so it reuses the mid tone. */
+    --accent-green-solid: #C2D8B9;
 
     /* Page canvas — the surface behind cards. Driven by the background-tint
        preference; the literals here are only the pre-hydration fallback. */
@@ -216,6 +223,7 @@
      roles (space chips, pinned stars) need to stay recognisable but must read
      as ink-on-dark instead of dark-on-pastel. */
   --accent-green:      #2c3a2a;
+  --accent-green-solid: #4f7a4a;
   --accent-green-mid:  #4a6a40;
   --accent-green-dark: #b6d9a6;
 
@@ -228,6 +236,7 @@
   --accent-amber:      #E8B23C;
   --accent-amber-dark: #F0C978;
   --accent-amber-bg:   #3a2f16;
+  --accent-amber-border: #5c4519;
 
   --danger:        #F08050;
   --danger-dark:   #F79A72;
@@ -347,9 +356,33 @@
   .app-canvas::before { display: none; }
 }
 
-/* ── Density ── */
-:root[data-density="compact"]   { font-size: 13.5px; }
-:root[data-density="spacious"]  { font-size: 15.5px; }
+/* ── Density ──
+ *
+ * All three are declared, and comfortable is declared explicitly at 16px.
+ * That is the fix for "spacious is tighter than comfortable": comfortable used
+ * to inherit the 16px browser default while spacious *set* 15.5px, so choosing
+ * spacious made every rem-based Tailwind padding and gap 3% smaller. The type
+ * is written in px throughout, so it did not grow to compensate — the setting
+ * did the exact opposite of its label.
+ *
+ * `--density` is the multiplier for the places that are written in px and
+ * cannot ride on the root font size. Used by `.density-stack` and
+ * `.density-row` below, which the to-do list and its rows carry.
+ */
+:root,
+:root[data-density="comfortable"] { font-size: 16px; --density: 1; }
+:root[data-density="compact"]     { font-size: 14px; --density: 0.84; }
+:root[data-density="spacious"]    { font-size: 18px; --density: 1.2; }
+
+/* Vertical rhythm between the blocks of a list, and the padding inside a row.
+   Both clamp so that compact stays tappable and spacious stays on screen. */
+.density-stack {
+  gap: clamp(10px, calc(20px * var(--density, 1)), 30px);
+}
+.density-row {
+  padding-top: clamp(8px, calc(14px * var(--density, 1)), 22px);
+  padding-bottom: clamp(8px, calc(14px * var(--density, 1)), 22px);
+}
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

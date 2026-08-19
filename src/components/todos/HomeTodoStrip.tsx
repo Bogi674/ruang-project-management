@@ -114,7 +114,7 @@ export function HomeTodoStrip() {
                 {overdue ? (
                   <span
                     className="text-11 text-accent-amber-dark bg-accent-amber-bg rounded-[5px] px-[7px] py-[2px] flex-shrink-0"
-                    style={{ border: '1px solid var(--chip-note-border)' }}
+                    style={{ border: '1px solid var(--accent-amber-border)' }}
                   >
                     Overdue
                   </span>

@@ -65,6 +65,113 @@ export function monthRange(from: Date = new Date()): { start: string; end: strin
   return { start: toISODate(startOfMonth(from)), end: toISODate(endOfMonth(from)) };
 }
 
+/* ── Periods ──────────────────────────────────────────────────────────────
+ *
+ * The Week and Month lists are open-ended: scrolling past either end reveals
+ * the neighbouring period rather than stopping. Everything they need to name
+ * and bound a period lives here, addressed by an integer offset from the
+ * current one, so "two weeks back" is `weekPeriod(-2)` and nothing has to pass
+ * dates around.
+ *
+ * Weeks run Monday to Sunday throughout — the calendar grid, the "rest of
+ * week" count and these headers all agree on that.
+ */
+
+export interface Period {
+  /** Offset from the current period. 0 is the one containing today. */
+  offset: number;
+  start: Date;
+  end: Date;
+  /** Inclusive ISO bounds, for the API. */
+  range: { start: string; end: string };
+  /** "August · Week 3" or "August 2026". */
+  title: string;
+  /** "Mon 17 – Sun 23 Aug". */
+  span: string;
+}
+
+/** The Monday on or before `from`. */
+export function mondayOf(from: Date = new Date()): Date {
+  return startOfWeek(from, { weekStartsOn: 1 });
+}
+
+/**
+ * Which Monday of its own month this one is, 1-based.
+ *
+ * Counted against the Monday's month rather than against a calendar grid, so
+ * the same week is called the same thing in the Week header and in the Month
+ * list — a grid-row index would disagree with it whenever a month does not
+ * begin on a Monday, which is six times in seven.
+ */
+export function weekOfMonth(monday: Date): number {
+  return Math.floor((monday.getDate() - 1) / 7) + 1;
+}
+
+export function weekPeriod(offset = 0, from: Date = new Date()): Period {
+  const start = addDays(mondayOf(from), offset * 7);
+  const end = addDays(start, 6);
+  const sameMonth = start.getMonth() === end.getMonth();
+  const thisYear = start.getFullYear() === new Date().getFullYear();
+
+  return {
+    offset,
+    start,
+    end,
+    range: { start: toISODate(start), end: toISODate(end) },
+    title: `${format(start, 'MMMM')} · Week ${weekOfMonth(start)}${thisYear ? '' : ` ${format(start, 'yyyy')}`}`,
+    // A week that straddles two months names both; one that does not says the
+    // month once, at the end, where it reads as a suffix rather than a repeat.
+    span: sameMonth
+      ? `${format(start, 'EEE d')} – ${format(end, 'EEE d MMM')}`
+      : `${format(start, 'EEE d MMM')} – ${format(end, 'EEE d MMM')}`,
+  };
+}
+
+export function monthPeriod(offset = 0, from: Date = new Date()): Period {
+  const start = startOfMonth(addMonths(from, offset));
+  const end = endOfMonth(start);
+  const thisYear = start.getFullYear() === new Date().getFullYear();
+
+  return {
+    offset,
+    start,
+    end,
+    range: { start: toISODate(start), end: toISODate(end) },
+    title: thisYear ? format(start, 'MMMM') : format(start, 'MMMM yyyy'),
+    span: `${format(start, 'd MMM')} – ${format(end, 'd MMM')}`,
+  };
+}
+
+export function periodFor(unit: 'week' | 'month', offset: number): Period {
+  return unit === 'week' ? weekPeriod(offset) : monthPeriod(offset);
+}
+
+/** The seven days of the week starting at `monday`. */
+export function daysOfWeek(monday: Date): string[] {
+  return Array.from({ length: 7 }, (_, i) => toISODate(addDays(monday, i)));
+}
+
+/**
+ * The weeks a month is made of, as the Monday of each.
+ *
+ * Starts at the Monday on or before the 1st, so the first row holds the days
+ * that share a week with the previous month — those days belong to that week
+ * and hiding them would make the first week of every month look short.
+ */
+export function weeksOfMonth(monthStart: Date): Date[] {
+  const first = mondayOf(monthStart);
+  const last = endOfMonth(monthStart);
+  const out: Date[] = [];
+  for (let cursor = first; cursor <= last; cursor = addDays(cursor, 7)) out.push(cursor);
+  return out;
+}
+
+/** "Mon 17" — the day heading inside a week. */
+export function formatDayLabel(iso: string, today: string = todayISO()): string {
+  if (iso === today) return `Today · ${format(fromISODate(iso), 'EEE d MMM')}`;
+  return format(fromISODate(iso), 'EEE d MMM');
+}
+
 /**
  * The inclusive date window a filter covers, or null for `all`.
  *
@@ -279,19 +386,18 @@ export interface ParsedQuickAdd {
   due_time: string | null;
   estimate_minutes: number | null;
   /** Human-readable echo for the chips, e.g. ['Fri 22 Aug', '15:00', '20m']. */
-  matches: { kind: 'date' | 'time' | 'estimate'; label: string; text: string; implied?: boolean }[];
+  matches: { kind: 'date' | 'time' | 'estimate'; label: string; text: string }[];
 }
 
-/**
- * The time a dated to-do gets when none was typed.
+/*
+ * There is deliberately no default due *time*.
  *
- * End of the working day, which is what every to-do app that has this
- * behaviour settles on: "today" almost always means "before I stop", and a
- * to-do with a time sorts and reminds properly while one without floats. It is
- * offered rather than imposed — it arrives as a dismissible chip like every
- * other guess quick add makes, so one click puts it back to no time at all.
+ * An end-of-day default was tried and rolled back. A time is a commitment, and
+ * inventing one for every dated to-do meant the list filled with 17:00 rows the
+ * user never asked for — which then sort, remind and read as if they mattered
+ * at a particular hour. A to-do goes where it is written and carries a time
+ * only when one is typed ("fri 3pm", "tonight").
  */
-export const DEFAULT_DUE_TIME = '17:00';
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const WEEKDAY_SHORT = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -396,21 +502,6 @@ export function parseQuickAdd(input: string, now: Date = new Date()): ParsedQuic
         }
       }
     }
-  }
-
-  /*
-   * A date with no time gets the end-of-day default. Pushed as an ordinary
-   * `time` match so the chip row shows it and one click removes it — the user
-   * sees what was assumed rather than discovering it in the detail panel.
-   */
-  if (result.due_date && !result.due_time) {
-    result.due_time = DEFAULT_DUE_TIME;
-    result.matches.push({
-      kind: 'time',
-      label: DEFAULT_DUE_TIME,
-      text: '',
-      implied: true,
-    });
   }
 
   result.title = text.replace(/\s+/g, ' ').trim();

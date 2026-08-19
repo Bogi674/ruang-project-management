@@ -36,22 +36,40 @@ export const TODO_SELECT =
 export const TODO_SELECT_LIGHT =
   'id, user_id, parent_id, space_id, title, description, due_date, due_time, estimate_minutes, position, is_completed, completed_at, subtask_mode, recurrence, recurrence_parent_id, reminder, source_note_id, created_at, updated_at, space:spaces(id, name, color, icon)';
 
+const EMPTY_COUNTS: TodoGroups['counts'] = {
+  tomorrow: 0,
+  restOfWeek: 0,
+  total: 0,
+  doneThisMonth: 0,
+};
+
 export interface LoadOptions {
   filter: TodoFilter;
   spaceId?: string | null;
+  /**
+   * An explicit window, overriding the filter's own.
+   *
+   * This is what scrolling into an adjacent week or month asks for: the Week
+   * and Month views are open-ended in both directions, so the client widens the
+   * range as the user scrolls rather than jumping to a different filter. When
+   * absent the filter decides, exactly as before.
+   */
+  range?: { start: string; end: string } | null;
+  /** Skip the count query — a range extension only needs its rows. */
+  withCounts?: boolean;
 }
 
 export async function loadTodoGroups(
   db: SupabaseClient,
   userId: string,
-  { filter, spaceId = null }: LoadOptions
+  { filter, spaceId = null, range: explicitRange = null, withCounts = true }: LoadOptions
 ): Promise<{ groups: TodoGroups | null; error: string | null }> {
   const today = todayISO();
 
   let query = db.from('todos').select(TODO_SELECT).eq('user_id', userId);
   if (spaceId) query = query.eq('space_id', spaceId);
 
-  const range = filterRange(filter);
+  const range = explicitRange ?? filterRange(filter);
   if (range) {
     /*
      * Not a plain BETWEEN. The window is "inside the range, OR undated, OR
@@ -75,7 +93,10 @@ export async function loadTodoGroups(
    * awaiting them in sequence added a whole round trip to every load of the
    * page — which is what made switching filters feel like a page navigation.
    */
-  const [rowsResult, counts] = await Promise.all([query, loadTodoCounts(db, userId)]);
+  const [rowsResult, counts] = await Promise.all([
+    query,
+    withCounts ? loadTodoCounts(db, userId) : Promise.resolve(EMPTY_COUNTS),
+  ]);
 
   if (rowsResult.error) return { groups: null, error: rowsResult.error.message };
 

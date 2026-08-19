@@ -4,12 +4,12 @@ import { Fragment, useState } from 'react';
 import { formatDueLabel, overdueAge, todayISO } from '@/lib/todos';
 import type { Todo } from '@/types';
 import { DropIndicator, useTodoDrag } from './TodoDragContext';
-import { InlineAddRow } from './QuickAdd';
+import { InlineAddRow, QuietAddButton } from './QuickAdd';
 import { TodoRow } from './TodoRow';
 import { useTodoActions } from './TodoProvider';
 
 interface TodoGroupProps {
-  /** Drop-target key: an ISO date, '' for unassigned, or 'overdue'. */
+  /** Drop-target key: an ISO date, '' for Anytime (no date), or 'overdue'. */
   groupKey: string;
   title: string;
   /** Open rows. */
@@ -25,6 +25,15 @@ interface TodoGroupProps {
   compact?: boolean;
   /** Caps the visible open rows and folds the rest behind a "N more" row. */
   cap?: number | null;
+  /**
+   * An empty day inside a month, folded to one line.
+   *
+   * The Month view renders every day of every week, so a month with work on
+   * eight days would otherwise be twenty-two full-height empty headings. Quiet
+   * keeps the day present — it is still a labelled drop target with its own add
+   * button — while taking it down to the height of a single row.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -45,10 +54,33 @@ export function TodoGroup({
   addRow = null,
   compact = false,
   cap = null,
+  quiet = false,
 }: TodoGroupProps) {
   const { dropIndexFor, draggingId } = useTodoDrag();
   const [expanded, setExpanded] = useState(false);
   const dropIndex = dropIndexFor(groupKey);
+
+  // Still a drop group, still an add button — just one line tall.
+  if (quiet && todos.length === 0 && done.length === 0) {
+    return (
+      <div
+        data-drop-group={groupKey}
+        className={`flex items-center gap-2.5 rounded-btn px-2 -mx-2 transition-colors duration-120 ${
+          dropIndex !== null ? 'bg-accent-blue-bg' : ''
+        }`}
+      >
+        <span
+          className={`font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] ${
+            tone === 'today' ? 'text-accent-blue-dark' : 'text-text-faint'
+          }`}
+        >
+          {title}
+        </span>
+        <div className="flex-1 h-px bg-border-light" />
+        {addRow && <QuietAddButton dueDate={addRow.dueDate} label={addRow.label} />}
+      </div>
+    );
+  }
 
   const capped = cap !== null && !expanded && todos.length > cap;
   const visible = capped ? todos.slice(0, cap) : todos;
@@ -176,7 +208,7 @@ export function OverdueGroup({ todos }: { todos: Todo[] }) {
       className="flex flex-col gap-[11px] rounded-card px-4 py-[15px]"
       style={{
         background: 'var(--accent-amber-bg)',
-        border: '1px solid var(--chip-note-border)',
+        border: '1px solid var(--accent-amber-border)',
       }}
     >
       <div className="flex items-center gap-2.5 flex-wrap">
@@ -186,13 +218,13 @@ export function OverdueGroup({ todos }: { todos: Todo[] }) {
         <span className="text-11 text-accent-amber-dark opacity-80">
           waiting since {formatDueLabel(oldest, today).toLowerCase()}
         </span>
-        <div className="flex-1 h-px" style={{ background: 'var(--chip-note-border)' }} />
+        <div className="flex-1 h-px" style={{ background: 'var(--accent-amber-border)' }} />
         <button
           type="button"
           onClick={moveAll}
           disabled={busy}
           className="h-8 inline-flex items-center text-11.5 text-accent-amber-dark bg-bg-base rounded-btn px-3 font-medium hover:opacity-85 disabled:opacity-50 transition-opacity duration-120 whitespace-nowrap"
-          style={{ border: '1px solid var(--chip-note-border)' }}
+          style={{ border: '1px solid var(--accent-amber-border)' }}
         >
           {busy ? 'Moving…' : 'Bring all to today'}
         </button>

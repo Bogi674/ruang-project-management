@@ -4,7 +4,7 @@ import { createServerClient } from '@/lib/supabase';
 import { ownsSpace, isUuid } from '@/lib/ownership';
 import { collectTodoFields } from '@/lib/todoPayload';
 import { loadTodoCounts, loadTodoGroups, TODO_SELECT_LIGHT } from '@/lib/todoQuery';
-import { POSITION_STEP } from '@/lib/todos';
+import { isISODate, POSITION_STEP } from '@/lib/todos';
 import type { TodoFilter } from '@/types';
 
 const FILTERS: TodoFilter[] = ['today', 'week', 'month', 'all'];
@@ -20,6 +20,23 @@ export async function GET(req: NextRequest) {
   const spaceId = url.searchParams.get('space');
   if (spaceId && !isUuid(spaceId)) return apiError('Invalid space', 400);
 
+  /*
+   * An explicit window. The Week and Month views scroll into adjacent periods
+   * rather than being pinned to the one the filter names, and each extension
+   * asks for exactly the slice it just revealed — so the rows already on screen
+   * are never re-sent, and never replaced.
+   */
+  const startParam = url.searchParams.get('start');
+  const endParam = url.searchParams.get('end');
+  let range: { start: string; end: string } | null = null;
+  if (startParam || endParam) {
+    if (!isISODate(startParam) || !isISODate(endParam)) {
+      return apiError('start and end must both be yyyy-MM-dd dates', 400);
+    }
+    if (endParam < startParam) return apiError('end must not precede start', 400);
+    range = { start: startParam, end: endParam };
+  }
+
   // The sidebar badge wants one number, not every row for the window. Skipping
   // the row query keeps a count that refreshes on every navigation cheap.
   if (url.searchParams.get('count') === 'true') {
@@ -29,6 +46,11 @@ export async function GET(req: NextRequest) {
   const { groups, error: loadError } = await loadTodoGroups(createServerClient(), userId!, {
     filter: filterParam as TodoFilter,
     spaceId,
+    range,
+    // A range extension is merged into what is already loaded, so it has no use
+    // for the headline totals — and they are the only part of the response that
+    // costs a second statement.
+    withCounts: !range,
   });
 
   if (loadError || !groups) {

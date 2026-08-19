@@ -57,6 +57,12 @@ interface TodoActions {
   dismissUndo: () => void;
 
   refresh: () => void;
+  /**
+   * Pull in a date range that is not part of the current filter's window and
+   * merge it into what is already loaded. This is how the Week and Month lists
+   * scroll into neighbouring periods.
+   */
+  loadRange: (start: string, end: string) => Promise<void>;
   /** Announces to the live region — "Marked done", "Moved to Wednesday 19". */
   announce: (message: string) => void;
   prefs: ResolvedTodoPreferences;
@@ -545,6 +551,52 @@ export function TodoProvider({
     [refresh, scheduleResync]
   );
 
+  /**
+   * Widen the window.
+   *
+   * Merged by id rather than assigned, for the same reason the post-mutation
+   * refetch was removed: the rows on screen are the user's optimistic state and
+   * a background response must never replace them. A range that has already
+   * been loaded is skipped outright, so scrolling back and forth over the same
+   * weeks costs one request each, not one per crossing.
+   */
+  const loadedRanges = useRef(new Set<string>());
+  const loadRange = useCallback(async (start: string, end: string) => {
+    const key = `${start}:${end}`;
+    if (loadedRanges.current.has(key)) return;
+    loadedRanges.current.add(key);
+
+    try {
+      const res = await fetch(`/api/todos?filter=all&start=${start}&end=${end}`);
+      if (!res.ok) throw new Error();
+      const groups = (await res.json()) as TodoGroups;
+      const incoming = flatten(groups);
+      if (incoming.length === 0) return;
+
+      setTodos((current) => {
+        const byId = new Map(current.map((t) => [t.id, t]));
+        let changed = false;
+        for (const row of incoming) {
+          // An id already in state keeps the copy that is there — it may carry
+          // an optimistic change this response predates.
+          if (byId.has(row.id)) continue;
+          byId.set(row.id, row);
+          changed = true;
+        }
+        return changed ? Array.from(byId.values()) : current;
+      });
+    } catch {
+      // A period that would not load shows as empty; scrolling back over it
+      // retries, because the key is dropped again here.
+      loadedRanges.current.delete(key);
+    }
+  }, []);
+
+  // A filter or space change invalidates what "already loaded" means.
+  useEffect(() => {
+    loadedRanges.current.clear();
+  }, [filter, spaceFilter, reloadToken]);
+
   const attach = useCallback(
     async (todoId: string, body: Record<string, unknown>): Promise<TodoAttachment | null> => {
       try {
@@ -607,6 +659,7 @@ export function TodoProvider({
       runUndo,
       dismissUndo,
       refresh,
+      loadRange,
       announce,
       prefs,
     }),
@@ -617,6 +670,7 @@ export function TodoProvider({
       deleteTodo,
       detach,
       dismissUndo,
+      loadRange,
       prefs,
       refresh,
       reorder,

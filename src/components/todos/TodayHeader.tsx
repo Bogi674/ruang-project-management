@@ -70,7 +70,7 @@ export function TodayHeader({ open, done }: { open: Todo[]; done: Todo[] }) {
           {streak > 1 && (
             <div
               className="flex items-center gap-[7px] bg-accent-amber-bg rounded-full px-3 py-1.5"
-              style={{ border: '1px solid var(--chip-note-border)' }}
+              style={{ border: '1px solid var(--accent-amber-border)' }}
             >
               <StarIcon size={13} className="text-accent-amber" />
               <span className="text-11.5 text-accent-amber-dark" style={{ fontWeight: 580 }}>

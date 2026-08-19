@@ -179,6 +179,9 @@ notifications
   through a Next.js route on the service role, and granting here would put the
   tables back on the Data API the moment schema usage were restored.
 
+- `supabase_schema_phase9.sql` -- additive: `users.color_scheme` and its CHECK.
+  **Adding a fifth scheme to `COLOR_SCHEMES` needs a new drop-and-recreate migration** --
+  an `if not exists` guard on the constraint name would silently skip it (see phase 5).
 - `supabase_schema_phase8.sql` -- additive: four indexes matching the query
   shapes the routes issue today (the undated branch of the filtered load, the
   single-statement count, completed parents, and the attachment embed). No data
@@ -186,7 +189,7 @@ notifications
   live database is unreachable from the agent sandbox, so nothing in it was
   checked against a real `EXPLAIN`.
 
-All eight files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
+All nine files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
 for the appearance columns and their constraints** -- running it alone is enough to
 bring an older database up to date. A missing preference column is not cosmetic:
 PostgREST fails a `select` as a whole when one column in it is unknown, which made
@@ -543,7 +546,7 @@ leaves the bounce. It also removes pull-to-refresh, which an installed PWA shoul
 | My Room | `/room` | Today focus + pinned + quick links + coming up |
 | Search | `/search` | Full-text search |
 | Calendar | `/calendar` | **The** calendar. Month/week/work-week/day, notes + widgets + to-dos, drag to assign date, unscheduled tray |
-| To-do | `/todo` | Today (default) / Week / Month / All. List only -- the calendar switch links to `/calendar` |
+| To-do | `/todo` | Today / Week / Month / All. List only -- the calendar switch links to `/calendar`. Week and Month are open-ended: scrolling past either end reaches the neighbouring period |
 | Account Settings | `/settings` | Profile tab + Appearance tab + Danger zone |
 
 All authenticated routes live inside an App Shell with top navbar + sidebar (desktop)
@@ -791,11 +794,31 @@ it red makes a list of slipped work read as a telling-off. The wording follows
 from the same thing -- "carried over", "waiting since Friday", "pull one
 forward, push it out, or let it go".
 
-**A dated to-do with no typed time gets 17:00** (`DEFAULT_DUE_TIME` in
-`lib/todos.ts`), offered as a dismissible chip in quick add like every other
-guess it makes. This covers both paths: a typed date, and a to-do landing on
-today because that is the user's `todo_default_assignment`. Dismissing the chip
-means no time at all.
+**There is no default due *time*, and that was a decision made twice.** An
+end-of-day 17:00 default was built and then rolled back: a time is a
+commitment, and inventing one for every dated to-do filled the list with 17:00
+rows nobody asked for, which then sort and remind as if a particular hour
+mattered. A to-do carries a time only when one is typed (`fri 3pm`,
+`tonight`). Do not reintroduce it.
+
+**Week and Month are `PeriodView`, and every day is rendered.** A period is
+addressed by an integer offset from the current one (`weekPeriod(-2)`), so the
+list reaches backwards and forwards without passing dates around; scrolling
+past either end appends the neighbouring period, and explicit "Earlier / Later"
+buttons cover the case where a quiet week is too short to scroll at all. Empty
+days are laid out too — a day you have not filled is still where Friday's work
+goes, and in Month view it folds to a one-line `quiet` group that is still a
+drop target with its own add button. Two details are easy to break: the
+backward sentinel must have **no** rootMargin and must check `scrollY > 0`, or
+it fires on mount and walks backwards on its own; and both observers must be
+rebuilt when the range changes, because an IntersectionObserver only reports
+threshold *crossings* and the sentinel does not move when a period is appended
+below it.
+
+**"Anytime", not "Unassigned".** Unassigned names a missing field; the list
+actually holds work that is real and wanted but not owed to a particular day.
+In the All view it is 40% of the page rather than a 300px rail -- All is the
+one range where undated work is what you came to look at.
 
 **Settings** are seven `users.todo_*` columns carried by `UserPreferences`
 alongside the appearance ones -- same `/api/users` call, same `ruang_prefs`
@@ -846,11 +869,25 @@ re-runnable without duplicating anything.
 Settings page (`/settings`) has three tabs: **Profile**, **Appearance** and **To-do**.
 
 **Appearance tab options:**
-- Accent color: 6 presets (Soft Blue, Sage, Sand, Rose, Plum, Slate). Applied live to CSS vars.
+- Colour scheme: Ruang Calm (default) / Electric Indigo / Citrus / Emerald / Neon Dusk.
+  A scheme sets the accent **and** the three semantic colours -- done, carried over,
+  destructive -- and deliberately stops there: page, surface, border and text colours are
+  untouched, so every scheme still reads as the same sheet of paper. `calm` emits *no*
+  custom properties at all, so the default palette is the globals.css values verbatim and
+  cannot drift as the table is edited. Stored in `users.color_scheme`.
+- Accent color: 6 presets (Soft Blue, Sage, Sand, Rose, Plum, Slate). An explicit
+  `accent_color` wins over the scheme's own accent, which is why picking a scheme in
+  Settings sends `accent_color: null` alongside it -- otherwise a scheme would change the
+  signal colours and leave the buttons the old colour.
 - Typography: Sans-serif / Serif (Newsreader).
 - Theme: Light / Dark. **Dark is opt-in only -- never inherited from OS.** This is now a
   product choice, not a limitation: the dark palette is complete (see Theming below).
-- Density: Compact / Comfortable / Spacious.
+- Density: Compact / Comfortable / Spacious. All three set `font-size` explicitly, and
+  comfortable is declared at 16px rather than left to inherit -- it used to inherit the
+  16px browser default while spacious *set* 15.5px, so choosing spacious made every
+  rem-based Tailwind padding 3% **smaller** while the px type stayed put. `--density` is
+  the multiplier for the places written in px; `.density-stack` and `.density-row` in
+  globals.css are what actually consume it.
 - App background: Plain / Dots / Grid / Diagonal / Rings / Glow -- the graphic on the app canvas
   behind Home, Storeroom, My Room, Search, Calendar and Spaces. Never applies to the note editor.
 - Page tint: Neutral / Warm / Cool / Mint / Blush / Accent -- the canvas colour behind cards.
