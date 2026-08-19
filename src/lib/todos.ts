@@ -10,6 +10,7 @@
 import {
   addDays,
   addMonths,
+  differenceInCalendarDays,
   endOfMonth,
   format,
   isValid,
@@ -85,6 +86,23 @@ export function formatDueLabel(iso: string, today: string = todayISO()): string 
   if (iso === toISODate(addDays(todayDate, 1))) return 'Tomorrow';
   if (iso === toISODate(addDays(todayDate, -1))) return 'Yesterday';
   return format(date, 'EEE d MMM');
+}
+
+/**
+ * How far behind a carried-over to-do is, in the shortest honest wording.
+ *
+ * Days rather than a date, because the question the row is answering is "how
+ * long has this been sitting there" — and a count is easier to triage against
+ * than working out how far back "Tue 12 Aug" was. Kept short: it renders in a
+ * narrow gutter beside the row.
+ */
+export function overdueAge(iso: string, today: string = todayISO()): string {
+  const days = differenceInCalendarDays(fromISODate(today), fromISODate(iso));
+  if (days <= 0) return '';
+  if (days === 1) return '1 day';
+  if (days < 14) return `${days} days`;
+  const weeks = Math.floor(days / 7);
+  return weeks === 1 ? '1 week' : `${weeks} weeks`;
 }
 
 /** The long form used as the Today page's <h1> — "Tuesday, 18 August". */
@@ -261,8 +279,19 @@ export interface ParsedQuickAdd {
   due_time: string | null;
   estimate_minutes: number | null;
   /** Human-readable echo for the chips, e.g. ['Fri 22 Aug', '15:00', '20m']. */
-  matches: { kind: 'date' | 'time' | 'estimate'; label: string; text: string }[];
+  matches: { kind: 'date' | 'time' | 'estimate'; label: string; text: string; implied?: boolean }[];
 }
+
+/**
+ * The time a dated to-do gets when none was typed.
+ *
+ * End of the working day, which is what every to-do app that has this
+ * behaviour settles on: "today" almost always means "before I stop", and a
+ * to-do with a time sorts and reminds properly while one without floats. It is
+ * offered rather than imposed — it arrives as a dismissible chip like every
+ * other guess quick add makes, so one click puts it back to no time at all.
+ */
+export const DEFAULT_DUE_TIME = '17:00';
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const WEEKDAY_SHORT = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -367,6 +396,21 @@ export function parseQuickAdd(input: string, now: Date = new Date()): ParsedQuic
         }
       }
     }
+  }
+
+  /*
+   * A date with no time gets the end-of-day default. Pushed as an ordinary
+   * `time` match so the chip row shows it and one click removes it — the user
+   * sees what was assumed rather than discovering it in the detail panel.
+   */
+  if (result.due_date && !result.due_time) {
+    result.due_time = DEFAULT_DUE_TIME;
+    result.matches.push({
+      kind: 'time',
+      label: DEFAULT_DUE_TIME,
+      text: '',
+      implied: true,
+    });
   }
 
   result.title = text.replace(/\s+/g, ' ').trim();

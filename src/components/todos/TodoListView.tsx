@@ -15,12 +15,19 @@ import { useTodos } from './TodoProvider';
  * The list half of /todo.
  *
  * Today is a single day with a headline; Week, Month and All are the same
- * grouped list scoped to a period. All is the only one that splits into two
- * columns, because it is the only one where the undated pile would otherwise
- * be buried under weeks of dated work.
+ * grouped list scoped to a period.
+ *
+ * One measure for all four. Today used to be centred in an 820–920px column
+ * while Week and Month ran the full width of the window, so switching range
+ * re-flowed every row and the same to-do was a different width depending on
+ * which tab you were on. `COLUMN` is that measure, and the only view that adds
+ * anything beside it is All — which puts the undated pile in its own column,
+ * because that is the one range long enough to bury it.
  */
+const COLUMN = 'w-full max-w-[920px] mx-auto px-8 pt-[26px] pb-8 flex flex-col gap-5';
+
 export function TodoListView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement> }) {
-  const { groups, filter, loading, prefs } = useTodos();
+  const { groups, filter, loading } = useTodos();
   const today = todayISO();
 
   if (loading && Object.keys(groups.dated).length === 0 && groups.unassigned.length === 0) {
@@ -33,7 +40,7 @@ export function TodoListView({ composeRef }: { composeRef?: React.RefObject<HTML
   const isAll = filter === 'all';
 
   const list = (
-    <div className="flex-1 min-w-0 flex flex-col gap-[22px] px-7 py-5 pb-7">
+    <div className={`${COLUMN} flex-1 min-w-0`}>
       <div ref={composeRef}>
         <QuickAdd
           placeholder="Add a to-do — lands in Today unless you name a date"
@@ -87,7 +94,7 @@ export function TodoListView({ composeRef }: { composeRef?: React.RefObject<HTML
       {/* Below the desktop breakpoint the column becomes a section directly
           under the filter bar rather than at the very bottom — the same
           "never bury it" reasoning, applied to a single-column layout. */}
-      <div className="md:hidden order-first px-7 pt-5">
+      <div className="md:hidden order-first px-8 pt-5 w-full max-w-[920px] mx-auto">
         <TodoGroup
           groupKey=""
           title={`Unassigned · ${groups.unassigned.length}`}
@@ -115,13 +122,15 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
   const nothingLeft = open.length === 0 && overdue.length === 0;
 
   return (
-    <div className="flex flex-col gap-5 px-8 pt-[26px] pb-8 max-w-[920px] w-full mx-auto">
+    <div className={COLUMN}>
       <TodayHeader open={[...overdue, ...open]} done={done} />
 
       <div ref={composeRef}>
         <QuickAdd showShortcut />
       </div>
 
+      {/* Carried-over work sits above today's own list under every filter —
+          see OverdueGroup for why it is amber and phrased the way it is. */}
       <OverdueGroup todos={overdue} />
 
       {nothingLeft ? (
@@ -138,7 +147,24 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
           todos={open}
           done={[]}
           cap={prefs.todayCap}
-          addRow={null}
+          addRow={{ dueDate: today, label: 'Add to today' }}
+        />
+      )}
+
+      {/*
+        Undated work is shown on Today as well, folded to a few rows.
+        Without it Today is the one range with no `groupKey=""` drop target on
+        screen, so a to-do could be dragged onto a date from anywhere but never
+        back off one — and "clear the date" is half of what dragging is for.
+      */}
+      {groups.unassigned.length > 0 && (
+        <TodoGroup
+          groupKey=""
+          title="No date"
+          todos={groups.unassigned}
+          compact
+          cap={3}
+          addRow={{ dueDate: null, label: 'Add without a date' }}
         />
       )}
 
@@ -172,7 +198,7 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
 
 function TodoListSkeleton() {
   return (
-    <div className="flex flex-col gap-3 px-8 pt-[26px]" aria-hidden="true">
+    <div className={COLUMN} aria-hidden="true">
       {[0, 1, 2].map((i) => (
         <div key={i} className="h-[52px] rounded-card bg-border-light animate-pulse" />
       ))}

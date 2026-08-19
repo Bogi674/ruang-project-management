@@ -4,7 +4,7 @@ import { addDays } from 'date-fns';
 import { toISODate, todayISO } from '@/lib/todos';
 import type { Todo } from '@/types';
 import { AnchoredPanel } from './AnchoredPanel';
-import { useTodos } from './TodoProvider';
+import { useTodoActions } from './TodoProvider';
 
 /**
  * The overflow menu on a to-do row.
@@ -22,7 +22,7 @@ export function TodoRowMenu({
   anchorRef: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
-  const { updateTodo, deleteTodo, setOpenTodoId, announce } = useTodos();
+  const { updateTodo, deleteTodo, setOpenTodoId, announce } = useTodoActions();
   const today = todayISO();
   const tomorrow = toISODate(addDays(new Date(), 1));
 

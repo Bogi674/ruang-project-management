@@ -1,13 +1,13 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, memo, useState } from 'react';
 import { useSpaces } from '@/lib/spaces';
 import type { Todo } from '@/types';
 import { QuickAdd } from './QuickAdd';
 import { TodoCheckbox } from './TodoCheckbox';
-import { DropIndicator, useTodoDrag } from './TodoDragContext';
+import { DropIndicator, useTodoDrag, useTodoDragActions } from './TodoDragContext';
 import { GripIcon } from './icons';
-import { useTodos } from './TodoProvider';
+import { useTodoActions } from './TodoProvider';
 
 /** Rows past this fold behind a "+N more" until asked. */
 const VISIBLE = 5;
@@ -24,7 +24,7 @@ const VISIBLE = 5;
  */
 export function UnassignedColumn({ todos }: { todos: Todo[] }) {
   const { spaces } = useSpaces();
-  const { dropIndexFor } = useTodoDrag();
+  const { dropIndexFor, draggingId } = useTodoDrag();
   const [expanded, setExpanded] = useState(false);
   const [spaceFilter, setSpaceFilter] = useState<string | null>(null);
 
@@ -72,7 +72,7 @@ export function UnassignedColumn({ todos }: { todos: Todo[] }) {
         {visible.map((todo, index) => (
           <Fragment key={todo.id}>
             {dropIndex === index && <DropIndicator />}
-            <UnassignedRow todo={todo} index={index} />
+            <UnassignedRow todo={todo} index={index} dragged={draggingId === todo.id} />
           </Fragment>
         ))}
         {dropIndex !== null && dropIndex >= visible.length && <DropIndicator />}
@@ -98,16 +98,24 @@ export function UnassignedColumn({ todos }: { todos: Todo[] }) {
 }
 
 /** A narrower row than TodoRow — the column is 300px and has no room for chips. */
-function UnassignedRow({ todo, index }: { todo: Todo; index: number }) {
-  const { toggleComplete, setOpenTodoId } = useTodos();
-  const { start, isDragging } = useTodoDrag();
+const UnassignedRow = memo(function UnassignedRow({
+  todo,
+  index,
+  dragged,
+}: {
+  todo: Todo;
+  index: number;
+  dragged: boolean;
+}) {
+  const { toggleComplete, setOpenTodoId } = useTodoActions();
+  const { start } = useTodoDragActions();
 
   return (
     <div
       data-drop-index={index}
       data-todo-id={todo.id}
       className={`group flex items-center gap-[9px] bg-bg-base border border-border-default rounded-widget px-3 py-2.5 ${
-        isDragging(todo.id) ? 'opacity-40 border-dashed' : ''
+        dragged ? 'opacity-40 border-dashed' : ''
       }`}
     >
       <button
@@ -141,7 +149,7 @@ function UnassignedRow({ todo, index }: { todo: Todo; index: number }) {
       )}
     </div>
   );
-}
+});
 
 function SpaceChipButton({
   active,

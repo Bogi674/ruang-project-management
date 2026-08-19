@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { parseQuickAdd, type ParsedQuickAdd } from '@/lib/todos';
-import { useTodos } from './TodoProvider';
+import { DEFAULT_DUE_TIME, parseQuickAdd, todayISO, type ParsedQuickAdd } from '@/lib/todos';
+import { useTodoActions } from './TodoProvider';
 import { CloseIcon, PlusIcon } from './icons';
 
 interface QuickAddProps {
@@ -42,7 +42,7 @@ export function QuickAdd({
   autoFocus = false,
   onCreated,
 }: QuickAddProps) {
-  const { createTodo, prefs } = useTodos();
+  const { createTodo, prefs } = useTodoActions();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   /** Chips the user dismissed, so a wrong guess costs one click, not a re-type. */
@@ -69,19 +69,35 @@ export function QuickAdd({
     const use = (kind: 'date' | 'time' | 'estimate') =>
       parsed.matches.some((m) => m.kind === kind) && !dismissed.includes(kind);
 
+    // Explicit `null` (the Unassigned column) is honoured; `undefined` falls
+    // back to the user's "new to-dos land on" setting.
+    const resolvedDate = use('date')
+      ? parsed.due_date
+      : dueDate !== undefined
+      ? dueDate
+      : prefs.assignment === 'today'
+      ? todayISO()
+      : null;
+
+    /*
+     * The end-of-day default again, for the dates this component supplies
+     * rather than the ones the parser found: a to-do added to a group's inline
+     * row, or one landing on today because that is the user's setting, should
+     * behave the same as one where "today" was typed. Dismissing the time chip
+     * still wins — that is the "unless I cancel it" half of the rule.
+     */
+    const dismissedTime = dismissed.includes('time');
+    const resolvedTime = use('time')
+      ? parsed.due_time
+      : resolvedDate && !dismissedTime
+      ? DEFAULT_DUE_TIME
+      : null;
+
     setSaving(true);
     const created = await createTodo({
       title,
-      // Explicit `null` (the Unassigned column) is honoured; `undefined` falls
-      // back to the user's "new to-dos land on" setting.
-      due_date: use('date')
-        ? parsed.due_date
-        : dueDate !== undefined
-        ? dueDate
-        : prefs.assignment === 'today'
-        ? new Date().toISOString().slice(0, 10)
-        : null,
-      due_time: use('time') ? parsed.due_time : null,
+      due_date: resolvedDate,
+      due_time: resolvedTime,
       estimate_minutes: use('estimate') ? parsed.estimate_minutes : null,
       space_id: spaceId,
     });
@@ -145,7 +161,11 @@ export function QuickAdd({
               key={chip.kind}
               type="button"
               onClick={() => setDismissed((d) => [...d, chip.kind])}
-              title={`Ignore “${chip.text}” and keep it in the title`}
+              title={
+                chip.implied
+                  ? `Clear the ${chip.label} default — no time at all`
+                  : `Ignore “${chip.text}” and keep it in the title`
+              }
               className="inline-flex items-center gap-1.5 text-11 text-accent-blue-dark bg-accent-blue-bg rounded-[5px] pl-2 pr-1.5 py-[3px] hover:opacity-80 transition-opacity duration-120"
             >
               {chip.label}

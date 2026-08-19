@@ -6,7 +6,6 @@ import type { TodoFilter, TodoGroups } from '@/types';
 import { FocusMode } from '@/components/todos/FocusMode';
 import { MigrationCard } from '@/components/todos/MigrationCard';
 import { MobileQuickAddSheet } from '@/components/todos/MobileQuickAddSheet';
-import { TodoCalendar } from '@/components/todos/TodoCalendar';
 import { TodoDetailPanel } from '@/components/todos/TodoDetailPanel';
 import { TodoDragProvider } from '@/components/todos/TodoDragContext';
 import { TodoFilterBar } from '@/components/todos/TodoFilterBar';
@@ -34,7 +33,7 @@ export function TodoClient({
 }
 
 function TodoScreen() {
-  const { view, error, liveMessage, undo, runUndo, dismissUndo, refresh, announce } = useTodos();
+  const { error, liveMessage, undo, runUndo, dismissUndo, refresh, announce } = useTodos();
   const searchParams = useSearchParams();
   const [focusOpen, setFocusOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -124,7 +123,7 @@ function TodoScreen() {
         <MigrationCard />
       </div>
 
-      {view === 'calendar' ? <TodoCalendar /> : <TodoListView composeRef={composeRef} />}
+      <TodoListView composeRef={composeRef} />
 
       <TodoDetailPanel />
       {focusOpen && <FocusMode onClose={() => setFocusOpen(false)} />}

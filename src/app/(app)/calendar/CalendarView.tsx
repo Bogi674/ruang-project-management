@@ -3,7 +3,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Note, Widget, ReminderContent, LinkContent } from '@/types';
+import { Note, Widget, ReminderContent, LinkContent, Todo } from '@/types';
+import { formatTime, todayISO } from '@/lib/todos';
+import { useTodos } from '@/components/todos/TodoProvider';
+import { useTodoDrag, useTodoDragActions } from '@/components/todos/TodoDragContext';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -12,7 +15,12 @@ const VIEW_KEY = 'ruang_calendar_view';
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 type CalendarViewType = 'month' | 'week' | 'workweek' | 'day';
-type FilterType = 'all' | 'notes' | 'checklists' | 'widgets';
+/**
+ * `checklists` is gone from this list on purpose. `notes.type = 'checklist'`
+ * is a deprecated shape kept only so old notes still open (see CLAUDE.md);
+ * a to-do is a `todos` row now, and that is what the pill offers.
+ */
+type FilterType = 'all' | 'notes' | 'todos' | 'widgets';
 
 interface CalendarViewProps {
   year: number;
@@ -25,10 +33,13 @@ interface CalendarViewProps {
 
 interface PaneItem {
   id: string;
-  kind: 'note' | 'checklist' | 'reminder' | 'file' | 'link';
+  kind: 'note' | 'checklist' | 'todo' | 'reminder' | 'file' | 'link';
   title: string;
   href: string;
+  /** Draggable onto a day with the HTML5 note DnD. */
   isNote: boolean;
+  /** Draggable onto a day with the pointer-based to-do DnD. */
+  todo?: Todo;
 }
 
 function toDateStr(d: Date) {
@@ -84,6 +95,13 @@ function getNoteChipStyle(type: string) {
 }
 
 function getPaneItemStyle(kind: string) {
+  if (kind === 'todo')
+    return {
+      bg: 'var(--chip-task-bg)',
+      dot: 'var(--chip-task-dot)',
+      text: 'var(--chip-task-ink)',
+      border: 'var(--chip-task-border)',
+    };
   if (kind === 'note')
     return {
       bg: 'var(--chip-note-bg)',
@@ -117,6 +135,13 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
   const today = new Date();
   const todayStr = toDateStr(today);
   const anchor = new Date(year, month - 1, day);
+
+  // The to-do layer. `groups` is already partitioned by date, so the grid only
+  // has to flatten it back into "what is on this day".
+  const { groups: todoGroups, setOpenTodoId, updateTodo } = useTodos();
+  const { start: startTodoDrag } = useTodoDragActions();
+  const { draggingId: draggingTodoId, dropIndexFor } = useTodoDrag();
+  const todayIso = todayISO();
 
   const [view, setView] = useState<CalendarViewType>('week');
   const [noteList, setNoteList] = useState<Note[]>(scheduledNotes);
@@ -161,6 +186,23 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     }
     return acc;
   }, {});
+
+  /*
+   * Dated to-dos by day, overdue included — a to-do that slipped still belongs
+   * on the day it was for, so the calendar shows where the backlog actually
+   * sits rather than pretending it is not there.
+   */
+  const todosByDate: Record<string, Todo[]> = {};
+  const addTodoToDay = (todo: Todo) => {
+    if (!todo.due_date) return;
+    (todosByDate[todo.due_date] = todosByDate[todo.due_date] || []).push(todo);
+  };
+  todoGroups.overdue.forEach(addTodoToDay);
+  Object.values(todoGroups.dated).forEach((list) => list.forEach(addTodoToDay));
+  Object.values(todoGroups.done).forEach((list) => list.forEach(addTodoToDay));
+
+  const showTodos = filter === 'all' || filter === 'todos';
+  const showNotes = filter === 'all' || filter === 'notes';
 
   const handleDragStart = useCallback((e: React.DragEvent, id: string, fromScheduled: boolean) => {
     e.dataTransfer.setData('noteId', id);
@@ -304,24 +346,44 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     isNote: true,
   }));
 
-  const allPaneItems = [...notePaneItems, ...widgetPaneItems];
+  // Undated to-dos share the tray with undated notes. This is what the /todo
+  // calendar's own "Unassigned" column used to be; there is one tray now.
+  const todoPaneItems: PaneItem[] = todoGroups.unassigned.map(t => ({
+    id: t.id,
+    kind: 'todo' as const,
+    title: t.title,
+    href: '#',
+    isNote: false,
+    todo: t,
+  }));
+
+  const allPaneItems = [...todoPaneItems, ...notePaneItems, ...widgetPaneItems];
 
   const filteredPaneItems = allPaneItems.filter(item => {
     const matchesFilter =
       filter === 'all' ||
-      (filter === 'notes' && item.kind === 'note') ||
-      (filter === 'checklists' && item.kind === 'checklist') ||
-      (filter === 'widgets' && !item.isNote);
+      (filter === 'notes' && (item.kind === 'note' || item.kind === 'checklist')) ||
+      (filter === 'todos' && item.kind === 'todo') ||
+      (filter === 'widgets' && !item.isNote && item.kind !== 'todo');
     const q = searchQuery.toLowerCase();
     const matchesSearch = !q || item.title.toLowerCase().includes(q);
     return matchesFilter && matchesSearch;
   });
 
-  function NoteChip({ note, fromScheduled }: { note: Note; fromScheduled: boolean }) {
+  /*
+   * These are render functions, not components.
+   *
+   * A component declared inside the body is a brand-new type on every render,
+   * so React unmounted and remounted the entire grid every time any state on
+   * this page changed — a search keystroke tore down 42 cells and built them
+   * again. Calling them returns the same elements with none of that churn.
+   */
+  function noteChip(note: Note, fromScheduled: boolean) {
     const title = note.title || 'Untitled';
     const style = getNoteChipStyle(note.type || 'note');
     return (
       <div
+        key={note.id}
         draggable
         onDragStart={(e) => handleDragStart(e, note.id, fromScheduled)}
         onDragEnd={handleDragEnd}
@@ -341,16 +403,67 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
     );
   }
 
-  function MonthCell({ date, inMonth }: { date: Date; inMonth: boolean }) {
+  /**
+   * A to-do on a day.
+   *
+   * `data-drop-index` is what the to-do drag controller hit-tests against, and
+   * the cell around it carries `data-drop-group` — that pairing is the entire
+   * wiring needed to drop a to-do onto a date here, exactly as in a list.
+   * Pressing the chip starts a drag; releasing without moving opens it.
+   */
+  function todoChip(todo: Todo, dateStr: string, index: number) {
+    const overdue = !todo.is_completed && !!todo.due_date && todo.due_date < todayIso;
+    const time = formatTime(todo.due_time);
+    return (
+      <button
+        key={todo.id}
+        type="button"
+        data-drop-index={index}
+        data-todo-id={todo.id}
+        onPointerDown={(e) => startTodoDrag(e, todo, dateStr)}
+        onClick={() => setOpenTodoId(todo.id)}
+        title={todo.title}
+        className={`w-full flex items-center gap-1 text-left text-[10.5px] px-1.5 py-[3px] rounded-[4px] mb-0.5 truncate touch-none cursor-grab select-none ${
+          draggingTodoId === todo.id ? 'opacity-40' : ''
+        } ${todo.is_completed ? 'line-through' : ''}`}
+        style={{
+          background: overdue ? 'var(--accent-amber-bg)' : 'var(--chip-task-bg)',
+          color: overdue ? 'var(--accent-amber-dark)' : 'var(--chip-task-ink)',
+        }}
+      >
+        <span
+          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+          style={{ background: overdue ? 'var(--accent-amber)' : 'var(--chip-task-dot)' }}
+        />
+        <span className="truncate">
+          {time && !todo.is_completed ? `${time} ` : ''}
+          {todo.title}
+        </span>
+      </button>
+    );
+  }
+
+  function monthCell(date: Date, inMonth: boolean, key: number) {
     const dateStr = toDateStr(date);
     const isToday = dateStr === todayStr;
     const isDragTarget = dragOverDate === dateStr;
-    const notes = notesByDate[dateStr] || [];
+    const notes = showNotes ? notesByDate[dateStr] || [] : [];
+    const todos = showTodos ? todosByDate[dateStr] || [] : [];
+    // The to-do drag controller lights up the cell it is over, the same way
+    // the note DnD does with `dragOverDate`.
+    const isTodoTarget = dropIndexFor(dateStr) !== null;
+
+    const shownTodos = todos.slice(0, 3);
+    const shownNotes = notes.slice(0, Math.max(0, 3 - shownTodos.length));
+    const hidden = todos.length - shownTodos.length + (notes.length - shownNotes.length);
+
     return (
       <div
+        key={key}
+        data-drop-group={dateStr}
         className={`flex flex-col p-1.5 border-b border-r border-border-light transition-colors duration-80 min-h-[90px] ${
           !inMonth ? 'bg-bg-subtle' : 'bg-bg-base'
-        } ${isDragTarget ? '!bg-accent-blue-bg' : inMonth ? 'hover:bg-bg-surface' : ''}`}
+        } ${isDragTarget || isTodoTarget ? '!bg-accent-blue-bg' : inMonth ? 'hover:bg-bg-surface' : ''}`}
         onDragOver={inMonth ? (e) => handleDragOver(e, dateStr) : undefined}
         onDragLeave={handleDragLeave}
         onDrop={inMonth ? (e) => handleDrop(e, dateStr) : undefined}
@@ -360,15 +473,16 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
         }`}>
           {date.getDate()}
         </span>
-        {notes.slice(0, 3).map(n => <NoteChip key={n.id} note={n} fromScheduled />)}
-        {notes.length > 3 && (
-          <span className="text-[9.5px] text-text-faint px-1">+{notes.length - 3} more</span>
+        {shownTodos.map((t, i) => todoChip(t, dateStr, i))}
+        {shownNotes.map(n => noteChip(n, true))}
+        {hidden > 0 && (
+          <span className="text-[9.5px] text-text-faint px-1">+{hidden} more</span>
         )}
       </div>
     );
   }
 
-  function WeekGrid() {
+  function weekGrid() {
     const cols = cells.length;
     const colStyle = { gridTemplateColumns: `repeat(${cols}, 1fr)` };
 
@@ -382,19 +496,22 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
           {cells.map((date, i) => {
             const dateStr = toDateStr(date);
             const isToday = dateStr === todayStr;
-            const notes = notesByDate[dateStr] || [];
-            const isDragTarget = dragOverDate === dateStr;
+            const notes = showNotes ? notesByDate[dateStr] || [] : [];
+            const todos = showTodos ? todosByDate[dateStr] || [] : [];
+            const isDragTarget = dragOverDate === dateStr || dropIndexFor(dateStr) !== null;
             return (
               <div
                 key={i}
-                className={`flex-1 border-l border-border-light p-1 transition-colors ${
+                data-drop-group={dateStr}
+                className={`flex-1 border-l border-border-light p-1 transition-colors overflow-y-auto ${
                   isToday ? 'bg-accent-blue-bg' : ''
                 } ${isDragTarget ? '!bg-accent-blue-bg' : 'hover:bg-bg-surface'}`}
                 onDragOver={(e) => handleDragOver(e, dateStr)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, dateStr)}
               >
-                {notes.map(n => <NoteChip key={n.id} note={n} fromScheduled />)}
+                {todos.map((t, index) => todoChip(t, dateStr, index))}
+                {notes.map(n => noteChip(n, true))}
               </div>
             );
           })}
@@ -575,9 +692,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
               ))}
             </div>
             <div className="grid grid-cols-7">
-              {cells.map((date, i) => (
-                <MonthCell key={i} date={date} inMonth={isCurrentMonth(date)} />
-              ))}
+              {cells.map((date, i) => monthCell(date, isCurrentMonth(date), i))}
             </div>
           </div>
         ) : (
@@ -603,7 +718,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                   );
                 })}
               </div>
-              <WeekGrid />
+              {weekGrid()}
             </div>
           </div>
         )}
@@ -664,7 +779,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
 
               {/* Filter pills */}
               <div className="flex gap-1 flex-wrap">
-                {(['all', 'notes', 'checklists', 'widgets'] as FilterType[]).map(f => (
+                {(['all', 'notes', 'todos', 'widgets'] as FilterType[]).map(f => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
@@ -680,8 +795,10 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
               </div>
             </div>
 
-            {/* Items list */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+            {/* Items list. `data-drop-group=""` makes the whole tray a to-do
+                drop target: dragging a dated to-do back in here clears its
+                date, which is what the /todo calendar's tray used to do. */}
+            <div data-drop-group="" className="flex-1 overflow-y-auto p-3 space-y-1.5">
               {filteredPaneItems.length === 0 ? (
                 <p className="text-[12px] text-text-faint text-center py-6">
                   {searchQuery
@@ -689,27 +806,44 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                     : 'Nothing here. That\'s a good sign.'}
                 </p>
               ) : (
-                filteredPaneItems.map(item => {
+                filteredPaneItems.map((item, index) => {
                   const style = getPaneItemStyle(item.kind);
+                  const isTodo = !!item.todo;
                   return (
                     <div
                       key={item.id}
+                      data-drop-index={isTodo ? index : undefined}
+                      data-todo-id={isTodo ? item.id : undefined}
                       draggable={item.isNote}
                       onDragStart={item.isNote ? (e) => handleDragStart(e, item.id, false) : undefined}
                       onDragEnd={item.isNote ? handleDragEnd : undefined}
+                      onPointerDown={isTodo ? (e) => startTodoDrag(e, item.todo!, '') : undefined}
                       className={`flex items-center gap-2 px-2.5 py-2 rounded-[8px] border select-none transition-all duration-120 ${
-                        draggingId === item.id ? 'opacity-40 scale-95' : 'hover:shadow-sm'
-                      } ${item.isNote ? 'cursor-grab' : 'cursor-default'}`}
+                        draggingId === item.id || draggingTodoId === item.id
+                          ? 'opacity-40 scale-95'
+                          : 'hover:shadow-sm'
+                      } ${item.isNote || isTodo ? 'cursor-grab touch-none' : 'cursor-default'}`}
                       style={{ background: style.bg, borderColor: style.border }}
                     >
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: style.dot }} />
-                      <Link
-                        href={item.href}
-                        className="flex-1 text-[12px] font-medium truncate no-underline hover:underline"
-                        style={{ color: style.text }}
-                      >
-                        {item.title}
-                      </Link>
+                      {isTodo ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpenTodoId(item.id)}
+                          className="flex-1 min-w-0 text-left text-[12px] font-medium truncate hover:underline"
+                          style={{ color: style.text }}
+                        >
+                          {item.title}
+                        </button>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          className="flex-1 text-[12px] font-medium truncate no-underline hover:underline"
+                          style={{ color: style.text }}
+                        >
+                          {item.title}
+                        </Link>
+                      )}
                       <span className="text-[9px] capitalize flex-shrink-0" style={{ color: style.dot }}>
                         {item.kind}
                       </span>
@@ -722,7 +856,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
             {filteredPaneItems.length > 0 && (
               <div className={`px-4 py-2.5 border-t border-border-light flex-shrink-0 transition-colors ${dragOverPane ? 'bg-accent-blue-bg' : ''}`}>
                 <p className="text-[10px] text-text-faint">
-                  {dragOverPane ? 'Drop here to unschedule' : 'Drag to calendar to assign a date'}
+                  {dragOverPane ? 'Drop here to unschedule' : 'Drag onto a day to schedule · drag back here to clear'}
                 </p>
               </div>
             )}
@@ -776,7 +910,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                 />
               </div>
               <div className="flex gap-1.5 overflow-x-auto toolbar-scroll">
-                {(['all', 'notes', 'checklists', 'widgets'] as FilterType[]).map(f => (
+                {(['all', 'notes', 'todos', 'widgets'] as FilterType[]).map(f => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
@@ -807,17 +941,31 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                       style={{ background: style.bg, borderColor: style.border }}
                     >
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: style.dot }} />
-                      <Link
-                        href={item.href}
-                        onClick={() => setSheetOpen(false)}
-                        className="flex-1 min-w-0 text-[13.5px] font-medium truncate no-underline"
-                        style={{ color: style.text }}
-                      >
-                        {item.title}
-                      </Link>
-                      {item.isNote ? (
+                      {item.todo ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSheetOpen(false);
+                            setOpenTodoId(item.id);
+                          }}
+                          className="flex-1 min-w-0 text-left text-[13.5px] font-medium truncate"
+                          style={{ color: style.text }}
+                        >
+                          {item.title}
+                        </button>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          onClick={() => setSheetOpen(false)}
+                          className="flex-1 min-w-0 text-[13.5px] font-medium truncate no-underline"
+                          style={{ color: style.text }}
+                        >
+                          {item.title}
+                        </Link>
+                      )}
+                      {item.isNote || item.todo ? (
                         <label
-                          className="relative w-9 h-9 flex items-center justify-center rounded-lg flex-shrink-0 active:bg-black/5"
+                          className="relative w-9 h-9 flex items-center justify-center rounded-lg flex-shrink-0 active:opacity-70"
                           style={{ color: style.text }}
                           title="Pick a date"
                         >
@@ -828,7 +976,11 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
                             type="date"
                             aria-label={`Schedule ${item.title}`}
                             defaultValue={todayStr}
-                            onChange={(e) => scheduleNote(item.id, e.target.value)}
+                            onChange={(e) =>
+                              item.todo
+                                ? updateTodo(item.id, { due_date: e.target.value || null })
+                                : scheduleNote(item.id, e.target.value)
+                            }
                             className="absolute inset-0 opacity-0"
                           />
                         </label>
@@ -843,9 +995,9 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
               )}
             </div>
 
-            {filteredPaneItems.some(i => i.isNote) && (
+            {filteredPaneItems.some(i => i.isNote || i.todo) && (
               <p className="px-4 pb-3 text-[11px] text-text-faint flex-shrink-0">
-                Tap the calendar icon on a note to give it a date.
+                Tap the calendar icon to give it a date.
               </p>
             )}
           </div>

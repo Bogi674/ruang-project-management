@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { formatTime, isOverdue, isParentLocked, subtaskProgress, todayISO } from '@/lib/todos';
 import type { Todo } from '@/types';
 import { TodoCheckbox } from './TodoCheckbox';
@@ -15,8 +15,8 @@ import {
   TimeChip,
 } from './TodoChips';
 import { GripIcon, OverflowIcon, PlusIcon } from './icons';
-import { useTodos } from './TodoProvider';
-import { useTodoDrag } from './TodoDragContext';
+import { useTodoActions } from './TodoProvider';
+import { useTodoDragActions } from './TodoDragContext';
 import { TodoRowMenu } from './TodoRowMenu';
 
 interface TodoRowProps {
@@ -26,6 +26,10 @@ interface TodoRowProps {
   index: number;
   /** Compact rows drop the description and shadow — used by the All view's groups. */
   compact?: boolean;
+  /** Passed down rather than read from context: the group already knows which
+   *  row is being carried, and reading it here would subscribe every row on
+   *  the page to every drag. */
+  dragged?: boolean;
 }
 
 /**
@@ -34,10 +38,15 @@ interface TodoRowProps {
  * Two shapes in one component rather than two components: an open row and a
  * completed one differ only in surface, checkbox tone and what the trailing
  * slot holds, and splitting them meant every chip change had to be made twice.
+ *
+ * Memoised, and deliberately reading only the identity-stable halves of the
+ * two contexts. A list of forty rows re-rendering on every keystroke in quick
+ * add — or on every frame of a drag — was the bulk of what made this page feel
+ * slow; with this in place a change to one to-do re-renders one row.
  */
-export function TodoRow({ todo, groupKey, index, compact = false }: TodoRowProps) {
-  const { toggleComplete, updateTodo, createTodo, setOpenTodoId, prefs } = useTodos();
-  const { start, isDragging, moveByKeyboard } = useTodoDrag();
+function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false }: TodoRowProps) {
+  const { toggleComplete, updateTodo, createTodo, setOpenTodoId, prefs } = useTodoActions();
+  const { start, moveByKeyboard } = useTodoDragActions();
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [subtaskDraft, setSubtaskDraft] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -47,7 +56,6 @@ export function TodoRow({ todo, groupKey, index, compact = false }: TodoRowProps
   const overdue = isOverdue(todo, new Date());
   const progress = subtaskProgress(todo);
   const locked = isParentLocked(todo);
-  const dragged = isDragging(todo.id);
   const hasSubtasks = (todo.subtasks?.length ?? 0) > 0;
   const time = formatTime(todo.due_time);
 
@@ -262,9 +270,11 @@ export function TodoRow({ todo, groupKey, index, compact = false }: TodoRowProps
   );
 }
 
+export const TodoRow = memo(TodoRowInner);
+
 /** A sub-task: same row, one size down, no chips of its own beyond an estimate. */
 function SubtaskRow({ subtask }: { subtask: Todo }) {
-  const { toggleComplete, prefs } = useTodos();
+  const { toggleComplete, prefs } = useTodoActions();
 
   return (
     <div className="flex items-center gap-[11px]">

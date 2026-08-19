@@ -31,7 +31,7 @@ Do not reference old schema, old routes, or old component structure.
 | RTE | TipTap v3 | Block-based editor; extensions listed below |
 | Email | Resend | Reminder delivery (built, env var: RESEND_API_KEY) |
 | Deployment | Vercel | Zero-config |
-| UI | Tailwind CSS + shadcn/ui | |
+| UI | Tailwind CSS | shadcn/ui was scaffolded and never adopted -- the twelve unused components, `cn()`, every `@radix-ui/*` package, `clsx`, `tailwind-merge` and `class-variance-authority` were removed. Do not reintroduce them; see rule 9 |
 | PWA | Native manifest | manifest.json + icons in /public/logo/; next-pwa NOT used |
 
 **Repo:** `github.com/Bogi674/ruang-project-management`, branch `main`
@@ -179,7 +179,14 @@ notifications
   through a Next.js route on the service role, and granting here would put the
   tables back on the Data API the moment schema usage were restored.
 
-All seven files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
+- `supabase_schema_phase8.sql` -- additive: four indexes matching the query
+  shapes the routes issue today (the undated branch of the filtered load, the
+  single-statement count, completed parents, and the attachment embed). No data
+  or privilege changes. Its header records what could **not** be verified: the
+  live database is unreachable from the agent sandbox, so nothing in it was
+  checked against a real `EXPLAIN`.
+
+All eight files are idempotent (safe to re-run). **Phase 5 supersedes phases 3 and 4
 for the appearance columns and their constraints** -- running it alone is enough to
 bring an older database up to date. A missing preference column is not cosmetic:
 PostgREST fails a `select` as a whole when one column in it is unknown, which made
@@ -294,6 +301,12 @@ Two consequences to remember:
 Space colours are user data and are legitimately inline; that is the exception.
 
 ### 10. Service role bypasses RLS -- every query carries its own filter
+
+`createServerClient()` caches its client at module scope. A fresh `createClient()`
+per request threw away the keep-alive pool and paid a TLS handshake per query --
+on a route running four statements that was most of its latency. Caching is safe
+because the client holds no per-user state (`persistSession` is off); it is
+**not** a licence to drop the `.eq('user_id', userId)`.
 
 All server queries use the Supabase **service role** client, so the RLS policies in
 `supabase_schema.sql` never execute. A missing `.eq('user_id', userId)` is a cross-tenant data
@@ -529,8 +542,8 @@ leaves the bounce. It also removes pull-to-refresh, which an installed PWA shoul
 | My Storeroom | `/storeroom` | All unassigned notes |
 | My Room | `/room` | Today focus + pinned + quick links + coming up |
 | Search | `/search` | Full-text search |
-| Calendar | `/calendar` | Month/week, drag to assign date, unscheduled tray |
-| To-do | `/todo` | Today (default) / Week / Month / All, list or calendar view |
+| Calendar | `/calendar` | **The** calendar. Month/week/work-week/day, notes + widgets + to-dos, drag to assign date, unscheduled tray |
+| To-do | `/todo` | Today (default) / Week / Month / All. List only -- the calendar switch links to `/calendar` |
 | Account Settings | `/settings` | Profile tab + Appearance tab + Danger zone |
 
 All authenticated routes live inside an App Shell with top navbar + sidebar (desktop)
@@ -694,6 +707,24 @@ the point -- a completion or a rename is a `map`, where a grouped structure
 would need the row found and rebuilt inside whichever bucket it sits in. Every
 mutation is optimistic and rolls the single row back on failure.
 
+**It is two contexts, not one, and that is load-bearing.** `useTodoActions()`
+returns the identity-stable half (every callback plus `prefs`); `useTodos()`
+merges it with the state half. A component that renders *one* to-do must use
+`useTodoActions()` and be `React.memo`'d -- `TodoRow` is. With a single context
+the actions object was rebuilt on every render, so ticking one checkbox
+re-rendered all forty rows. The grouping `useMemo` also caches its parent
+objects: nesting sub-tasks produces `{...t, subtasks}`, and a fresh object
+there defeats every memo downstream, so the previous object is reused whenever
+the parent row and its children are the same references.
+
+**Never refetch the window after a mutation.** There used to be a debounced
+`GET /api/todos` 1.5s after every change; a second change landing inside that
+window was overwritten by the in-flight reload, which is what made ticks and
+drags visibly undo themselves. Only the headline counts come from outside the
+current window, so only the counts are refetched (`GET /api/todos?count=true`,
+one cheap statement). The rows on screen are never replaced by a background
+request.
+
 **Grouping** is in `lib/todoQuery.ts` and is shared by `GET /api/todos` and the
 `/todo` server component, so the first paint and every later refetch agree.
 The window is *not* a plain BETWEEN: it is "inside the range, OR undated, OR
@@ -713,6 +744,11 @@ UPDATE. Midpoints run out of float precision eventually; `needsRebalance()`
 detects that and the group is renumbered onto clean multiples in the same
 request.
 
+`reorder()` applies the move to local state **before** it sends anything. It
+did not, and the comment claiming the caller had already done so was wrong --
+so a drop across dates left the row where it started until something unrelated
+reloaded the page, which read as "dragging does not work".
+
 **Drag and drop** is `TodoDragContext`, built on **Pointer Events**, not the
 HTML5 DnD that `lib/dnd.ts` uses for notes. HTML5 DnD does not fire on touch at
 all, and cross-date reordering was asked for on a phone as much as a desktop.
@@ -720,6 +756,14 @@ Drop targets are found by hit-testing `data-drop-group` / `data-drop-index` in
 the DOM, which is why calendar cells and the Unassigned tray are drop targets
 with no wiring of their own. Touch lifts on a 350ms long press; a mouse lifts
 after 4px of movement. `Ctrl/Cmd + ↑/↓` does the same thing from the keyboard.
+
+**Nothing that changes at pointer speed goes through React.** The ghost card is
+positioned by writing `transform` on its own node; the hit test runs once per
+animation frame, not once per `pointermove`; and state is set only when the
+*drop target* changes. It is also split the same way the to-do context is:
+`useTodoDragActions()` is stable, so a row that only needs to start a drag is
+not re-rendered by anybody else's. Putting `x`/`y` in React state -- which it
+used to -- re-rendered every row on the page sixty times a second.
 
 **Sub-tasks** are `todos` rows with `parent_id` set, **one level only**. The
 database cannot express that (it needs a second row), so `POST /api/todos`
@@ -738,9 +782,20 @@ one abandoned daily habit into a wall of overdue.
 matches no past-dated rows. The server re-checks the setting -- the client
 asking does not make it the user's choice.
 
-**Overdue is amber, never red.** `--danger` is for destructive actions. Being
-late is a state of affairs, not an error, and painting it like one makes a list
-of slipped to-dos read as a telling-off.
+**Carried over, not overdue.** Slipped to-dos render as their own amber panel
+(`OverdueGroup`) pinned above every group under every filter, with the age of
+each one in a gutter, the date of the oldest in the header, and one button that
+brings the whole backlog to today. `--danger` is for destructive actions and
+this is not one: being late is a state of affairs, not an error, and painting
+it red makes a list of slipped work read as a telling-off. The wording follows
+from the same thing -- "carried over", "waiting since Friday", "pull one
+forward, push it out, or let it go".
+
+**A dated to-do with no typed time gets 17:00** (`DEFAULT_DUE_TIME` in
+`lib/todos.ts`), offered as a dismissible chip in quick add like every other
+guess it makes. This covers both paths: a typed date, and a to-do landing on
+today because that is the user's `todo_default_assignment`. Dismissing the chip
+means no time at all.
 
 **Settings** are seven `users.todo_*` columns carried by `UserPreferences`
 alongside the appearance ones -- same `/api/users` call, same `ruang_prefs`
@@ -748,6 +803,14 @@ cache, so the To-do page has them before first paint. They are *not* theme
 values and `resolveTheme()` ignores them; `resolveTodoPreferences()` in
 `lib/todos.ts` resolves the defaults, because null means "never chosen", not
 "off".
+
+**There is one calendar and it is `/calendar`.** `/todo` used to carry its own
+month grid behind a List/Calendar switch: a second grid, a second set of drop
+rules, a second answer to "what belongs on a day". The to-do layer moved into
+`CalendarView` instead -- `CalendarScreen` wraps it in the same `TodoProvider`
+and `TodoDragProvider` the list uses, so a to-do dropped on a day there runs
+exactly the code a drop in a list runs. The filter bar's Calendar control is a
+link, not a view toggle. Do not add a second calendar back.
 
 **Migration.** `POST /api/todos/migrate` converts `type = 'checklist'` notes:
 each TipTap `taskItem` becomes an unassigned to-do keeping its order, checked
@@ -897,7 +960,9 @@ src/
       search/page.tsx          -- /search
       calendar/
         page.tsx               -- /calendar
-        CalendarView.tsx       -- interactive month/week calendar client component
+        CalendarScreen.tsx     -- mounts TodoProvider + TodoDragProvider around the view
+        CalendarView.tsx       -- the app's only calendar: month/week/work-week/day,
+                                  notes + widgets + to-dos, one unscheduled tray
     api/
       auth/[...nextauth]/      -- NextAuth handler
       notes/
@@ -967,11 +1032,8 @@ src/
       KeyboardShortcutsPanel.tsx -- keyboard shortcut reference overlay (? key)
     home/
       Greeting.tsx             -- time-aware greeting with client-side date correction
-    ui/                        -- shadcn/ui components
-      DatePickerPopover.tsx    -- custom date picker popover
-      avatar.tsx, badge.tsx, button.tsx, dialog.tsx, dropdown-menu.tsx,
-      input.tsx, label.tsx, scroll-area.tsx, select.tsx, separator.tsx,
-      tabs.tsx, textarea.tsx
+    ui/
+      DatePickerPopover.tsx    -- custom date picker popover (the only file here)
   lib/
     supabase.ts                -- createServerClient + createBrowserClient (never use for file storage)
     r2.ts                      -- getR2PresignedPutUrl, getR2SignedUrl, deleteFromR2
@@ -1126,11 +1188,13 @@ Two supporting pieces, both easy to break:
 ### Phase 7 -- First-class To-dos (built)
 
 - `todos` + `todo_attachments` tables, RLS, and seven `users.todo_*` preference columns
-- `/todo` with Today / Week / Month / All, list and calendar views
+- `/todo` with Today / Week / Month / All (list only -- the calendar lives at `/calendar`)
 - Quick add everywhere (sticky bar, per-group inline row, Unassigned column, mobile sheet, FAB)
   with typed date/duration parsing ("fri 3pm", "~20m") echoed as dismissible chips
-- Pointer-Events drag and drop: within a group, across dates, onto calendar cells,
-  onto the Unassigned tray; `Ctrl/Cmd + ↑/↓` from the keyboard
+- Pointer-Events drag and drop: within a group, across dates, onto any cell of any
+  `/calendar` view (month, week, work week, day), onto the Unassigned tray to clear
+  a date; `Ctrl/Cmd + ↑/↓` from the keyboard. On touch, the mobile tray's date
+  picker does the same job, since a drag cannot reach a cell behind a sheet.
 - Sub-tasks with Independent / Dependent completion
 - Deadline, Reminder, Repeat and Attach popovers; 440px detail drawer
 - Focus mode with a 25-minute timer; progress bar and streak

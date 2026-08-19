@@ -1,12 +1,12 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { formatDueLabel, todayISO } from '@/lib/todos';
+import { formatDueLabel, overdueAge, todayISO } from '@/lib/todos';
 import type { Todo } from '@/types';
 import { DropIndicator, useTodoDrag } from './TodoDragContext';
 import { InlineAddRow } from './QuickAdd';
 import { TodoRow } from './TodoRow';
-import { useTodos } from './TodoProvider';
+import { useTodoActions } from './TodoProvider';
 
 interface TodoGroupProps {
   /** Drop-target key: an ISO date, '' for unassigned, or 'overdue'. */
@@ -46,7 +46,7 @@ export function TodoGroup({
   compact = false,
   cap = null,
 }: TodoGroupProps) {
-  const { dropIndexFor } = useTodoDrag();
+  const { dropIndexFor, draggingId } = useTodoDrag();
   const [expanded, setExpanded] = useState(false);
   const dropIndex = dropIndexFor(groupKey);
 
@@ -82,7 +82,13 @@ export function TodoGroup({
         {visible.map((todo, index) => (
           <Fragment key={todo.id}>
             {dropIndex === index && <DropIndicator />}
-            <TodoRow todo={todo} groupKey={groupKey} index={index} compact={compact} />
+            <TodoRow
+              todo={todo}
+              groupKey={groupKey}
+              index={index}
+              compact={compact}
+              dragged={draggingId === todo.id}
+            />
           </Fragment>
         ))}
         {/* The line past the last row, for an append. Only meaningful when the
@@ -113,7 +119,13 @@ export function TodoGroup({
             <div className="flex-1 h-px bg-border-light" />
           </div>
           {done.map((todo, index) => (
-            <TodoRow key={todo.id} todo={todo} groupKey={groupKey} index={visible.length + index} compact />
+            <TodoRow
+              key={todo.id}
+              todo={todo}
+              groupKey={groupKey}
+              index={visible.length + index}
+              compact
+            />
           ))}
         </>
       )}
@@ -124,46 +136,97 @@ export function TodoGroup({
 }
 
 /**
- * The "Overdue · 3" group.
+ * Carried over — the to-dos that did not get done on the day they were for.
  *
- * Pinned above everything under every filter, with one button that clears the
- * whole backlog to today — the single most useful action on the page for
- * someone who has been away for a few days.
+ * Pinned above everything under every filter, so nothing that slipped can be
+ * out of sight; today's list always opens with them. The tone is the whole
+ * design: amber rather than red, "carried over" rather than "overdue" or
+ * "late", counted in days rather than scolded about, and a single button that
+ * clears the entire backlog onto today. Nothing here should read as a
+ * telling-off — being behind is a state of affairs, and the useful thing a
+ * to-do list can do about it is make catching up one tap.
  */
 export function OverdueGroup({ todos }: { todos: Todo[] }) {
-  const { updateTodo, announce } = useTodos();
+  const { updateTodo, announce } = useTodoActions();
+  const { dropIndexFor, draggingId } = useTodoDrag();
   const today = todayISO();
+  const [busy, setBusy] = useState(false);
+  const dropIndex = dropIndexFor('overdue');
 
   if (todos.length === 0) return null;
 
   async function moveAll() {
+    setBusy(true);
+    // Sent together rather than one after another: with a week's backlog the
+    // sequential version took long enough that rows visibly trickled upward.
     await Promise.all(todos.map((todo) => updateTodo(todo.id, { due_date: today })));
-    announce(`Moved ${todos.length} overdue to-dos to today`);
+    setBusy(false);
+    announce(`Brought ${todos.length} carried-over to-dos to today`);
   }
 
+  // The oldest one sets the tone of the summary line — "since Friday" is a
+  // more useful thing to know than a raw count.
+  const oldest = todos.reduce(
+    (min, todo) => (todo.due_date && todo.due_date < min ? todo.due_date : min),
+    today
+  );
+
   return (
-    <TodoGroup
-      groupKey="overdue"
-      title={`Overdue · ${todos.length}`}
-      todos={todos}
-      tone="overdue"
-      compact
-      action={
+    <section
+      className="flex flex-col gap-[11px] rounded-card px-4 py-[15px]"
+      style={{
+        background: 'var(--accent-amber-bg)',
+        border: '1px solid var(--chip-note-border)',
+      }}
+    >
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <h2 className="m-0 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-accent-amber-dark">
+          Carried over · {todos.length}
+        </h2>
+        <span className="text-11 text-accent-amber-dark opacity-80">
+          waiting since {formatDueLabel(oldest, today).toLowerCase()}
+        </span>
+        <div className="flex-1 h-px" style={{ background: 'var(--chip-note-border)' }} />
         <button
           type="button"
           onClick={moveAll}
-          className="text-11.5 text-accent-blue-dark border border-border-medium rounded-btn px-2.5 py-[5px] hover:bg-accent-blue-bg transition-colors duration-120"
+          disabled={busy}
+          className="h-8 inline-flex items-center text-11.5 text-accent-amber-dark bg-bg-base rounded-btn px-3 font-medium hover:opacity-85 disabled:opacity-50 transition-opacity duration-120 whitespace-nowrap"
+          style={{ border: '1px solid var(--chip-note-border)' }}
         >
-          Move all to today
+          {busy ? 'Moving…' : 'Bring all to today'}
         </button>
-      }
-    />
-  );
-}
+      </div>
 
-/** Formats a group's header — "Today · Tue 18 Aug", "Wed 19 Aug". */
-export function dateGroupTitle(iso: string, today: string): string {
-  const label = formatDueLabel(iso, today);
-  if (iso === today) return `Today · ${new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`;
-  return label;
+      <p className="m-0 text-11.5 text-accent-amber-dark opacity-80 leading-[1.5]">
+        Still open from before today. Pull one forward, push it out, or let it go — no wrong answer.
+      </p>
+
+      <div data-drop-group="overdue" className="flex flex-col gap-[9px]">
+        {todos.map((todo, index) => (
+          <Fragment key={todo.id}>
+            {dropIndex === index && <DropIndicator />}
+            <div className="flex items-center gap-2.5">
+              <span
+                className="hidden sm:inline-block w-[62px] flex-shrink-0 text-right font-mono text-[9.5px] uppercase tracking-[0.06em] text-accent-amber-dark opacity-70"
+                aria-hidden="true"
+              >
+                {todo.due_date ? overdueAge(todo.due_date, today) : ''}
+              </span>
+              <div className="flex-1 min-w-0">
+                <TodoRow
+                  todo={todo}
+                  groupKey="overdue"
+                  index={index}
+                  compact
+                  dragged={draggingId === todo.id}
+                />
+              </div>
+            </div>
+          </Fragment>
+        ))}
+        {dropIndex !== null && dropIndex >= todos.length && <DropIndicator />}
+      </div>
+    </section>
+  );
 }

@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import type { TodoFilter } from '@/types';
-import { ArrowRightIcon, CalendarIcon, ListIcon, TargetIcon } from './icons';
+import { ArrowRightIcon, CalendarIcon, TargetIcon } from './icons';
 import { useTodos } from './TodoProvider';
 
 const FILTERS: { value: TodoFilter; label: string }[] = [
@@ -14,14 +15,23 @@ const FILTERS: { value: TodoFilter; label: string }[] = [
 /**
  * The bar across the top of /todo: what you are looking at, how, and the way
  * out into focus mode.
+ *
+ * Every control on it is the same 32px high and the same 9px radius. They were
+ * not: the segmented range switch sat at 30px, the view toggle at 28, and
+ * Focus was a filled, shadowed 34px pill that read as the most important thing
+ * on a page where it is the least often used. Uniform height is not tidiness
+ * for its own sake — a row of controls at four different sizes has no visual
+ * hierarchy left to spend on the thing that actually matters.
  */
+const CONTROL = 'h-8 inline-flex items-center rounded-[9px]';
+
 export function TodoFilterBar({ onFocus }: { onFocus: () => void }) {
-  const { filter, setFilter, view, setView, groups } = useTodos();
+  const { filter, setFilter, groups } = useTodos();
   const { tomorrow, restOfWeek } = groups.counts;
 
   return (
     <div className="bg-bg-base border-b border-border-default px-6 py-3 flex items-center gap-2.5 flex-wrap">
-      <div role="tablist" aria-label="Time range" className="flex bg-bg-subtle rounded-[9px] p-[3px]">
+      <div role="tablist" aria-label="Time range" className={`${CONTROL} bg-bg-subtle p-[3px]`}>
         {FILTERS.map((option) => {
           const active = filter === option.value;
           return (
@@ -30,8 +40,10 @@ export function TodoFilterBar({ onFocus }: { onFocus: () => void }) {
               role="tab"
               aria-selected={active}
               onClick={() => setFilter(option.value)}
-              className={`px-3.5 py-1.5 text-12.5 rounded-[7px] transition-colors duration-120 ${
-                active ? 'bg-bg-base text-text-primary shadow-card' : 'text-text-secondary hover:text-text-primary'
+              className={`h-[26px] px-3.5 inline-flex items-center text-12.5 rounded-[7px] transition-colors duration-120 ${
+                active
+                  ? 'bg-bg-base text-text-primary shadow-card'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               style={{ fontWeight: active ? 580 : 400 }}
             >
@@ -50,7 +62,7 @@ export function TodoFilterBar({ onFocus }: { onFocus: () => void }) {
         <button
           type="button"
           onClick={() => setFilter('week')}
-          className="hidden sm:flex items-center gap-[7px] text-11.5 text-text-secondary bg-bg-base border border-border-default rounded-[9px] px-[11px] py-1.5 hover:border-border-medium transition-colors duration-120"
+          className={`${CONTROL} hidden sm:inline-flex gap-[7px] text-11.5 text-text-secondary bg-bg-base border border-border-default px-[11px] hover:border-border-medium transition-colors duration-120`}
         >
           <span>
             Tomorrow <b className="font-semibold text-text-primary">{tomorrow}</b>
@@ -70,25 +82,26 @@ export function TodoFilterBar({ onFocus }: { onFocus: () => void }) {
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="flex border border-border-default rounded-[9px] overflow-hidden bg-bg-base">
-          <ViewButton active={view === 'list'} onClick={() => setView('list')} label="List">
-            <ListIcon size={13} />
-          </ViewButton>
-          <ViewButton
-            active={view === 'calendar'}
-            onClick={() => setView('calendar')}
-            label="Calendar"
-            bordered
-          >
-            <CalendarIcon size={13} />
-          </ViewButton>
-        </div>
+        {/*
+          There is one calendar in this app and it is not here. /todo used to
+          carry its own month grid behind a List/Calendar switch, which meant
+          two calendars with two sets of behaviour, two drag implementations
+          and two definitions of what belongs on a day. This goes to the real
+          one, where to-dos sit alongside dated notes and reminders.
+        */}
+        <Link
+          href="/calendar"
+          className={`${CONTROL} gap-1.5 px-[11px] text-12 text-text-secondary bg-bg-base border border-border-default no-underline hover:border-border-medium hover:text-text-primary transition-colors duration-120`}
+        >
+          <CalendarIcon size={13} />
+          Calendar
+        </Link>
 
         <button
           type="button"
           onClick={onFocus}
           title="One thing at a time (F)"
-          className="flex items-center gap-[7px] text-12.5 text-accent-ink bg-accent-blue rounded-[9px] px-3.5 py-[7px] shadow-fab hover:shadow-fab-hover transition-shadow duration-150"
+          className={`${CONTROL} gap-[7px] px-3.5 text-12.5 text-accent-blue-dark bg-accent-blue-bg border border-transparent hover:border-accent-blue transition-colors duration-120`}
           style={{ fontWeight: 580 }}
         >
           <TargetIcon size={13} />
@@ -96,34 +109,5 @@ export function TodoFilterBar({ onFocus }: { onFocus: () => void }) {
         </button>
       </div>
     </div>
-  );
-}
-
-function ViewButton({
-  active,
-  onClick,
-  label,
-  bordered = false,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  bordered?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex items-center gap-1.5 px-[11px] py-1.5 text-12 transition-colors duration-120 ${
-        bordered ? 'border-l border-border-default' : ''
-      } ${active ? 'bg-bg-subtle text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
-      style={{ fontWeight: active ? 580 : 400 }}
-    >
-      {children}
-      {label}
-    </button>
   );
 }

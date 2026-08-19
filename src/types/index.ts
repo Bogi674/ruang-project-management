@@ -149,7 +149,6 @@ export interface FileRecord {
 
 /** Which slice of time the list is showing. Persisted per user. */
 export type TodoFilter = 'today' | 'week' | 'month' | 'all';
-export type TodoView = 'list' | 'calendar';
 
 /** Whether a parent's own checkbox is gated by its sub-tasks. */
 export type SubtaskMode = 'independent' | 'dependent';
