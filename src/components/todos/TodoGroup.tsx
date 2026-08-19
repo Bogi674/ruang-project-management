@@ -95,9 +95,9 @@ export function TodoGroup({
 
   return (
     <section className="flex flex-col gap-[9px]">
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 pt-1">
         <h2
-          className={`m-0 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] ${headerColor}`}
+          className={`m-0 font-mono text-[10px] font-bold uppercase tracking-[0.1em] ${headerColor}`}
         >
           {title}
         </h2>
@@ -106,7 +106,7 @@ export function TodoGroup({
             {todos.length} open{done.length > 0 && ` · ${done.length} done`}
           </span>
         )}
-        <div className="flex-1 h-px bg-border-default" />
+        <div className="flex-1 h-px bg-border-medium" />
         {action}
       </div>
 

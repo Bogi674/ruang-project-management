@@ -36,7 +36,7 @@ export default async function TodoPage({
   const requested = searchParams.filter;
   const filter: TodoFilter = FILTERS.includes(requested as TodoFilter)
     ? (requested as TodoFilter)
-    : 'today';
+    : 'week';
 
   // A failed load is not a failed page: the client refetches and shows its own
   // error, which is a far better outcome than a 500 on the To-do tab.
