@@ -57,14 +57,23 @@ export interface LoadOptions {
   range?: { start: string; end: string } | null;
   /** Skip the count query — a range extension only needs its rows. */
   withCounts?: boolean;
+  /**
+   * The caller's local date (yyyy-MM-dd).
+   *
+   * Vercel runs in UTC; users in UTC+7 experience a 7-hour window where the
+   * server's "today" is yesterday from their perspective. When the browser
+   * sends its own date via this param, the query and grouping use it instead
+   * of the server clock, so "Today" always shows the caller's day.
+   */
+  clientToday?: string | null;
 }
 
 export async function loadTodoGroups(
   db: SupabaseClient,
   userId: string,
-  { filter, spaceId = null, range: explicitRange = null, withCounts = true }: LoadOptions
+  { filter, spaceId = null, range: explicitRange = null, withCounts = true, clientToday = null }: LoadOptions
 ): Promise<{ groups: TodoGroups | null; error: string | null }> {
-  const today = todayISO();
+  const today = clientToday ?? todayISO();
 
   let query = db.from('todos').select(TODO_SELECT).eq('user_id', userId);
   if (spaceId) query = query.eq('space_id', spaceId);

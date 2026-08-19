@@ -14,7 +14,7 @@ import {
   SubtaskProgress,
   TimeChip,
 } from './TodoChips';
-import { GripIcon, OverflowIcon, PlusIcon } from './icons';
+import { ArrowRightIcon, GripIcon, OverflowIcon, PlusIcon } from './icons';
 import { useTodoActions } from './TodoProvider';
 import { useTodoDragActions } from './TodoDragContext';
 import { TodoRowMenu } from './TodoRowMenu';
@@ -209,10 +209,9 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
               onClick={() => updateTodo(todo.id, { due_date: today })}
               aria-label="Move to today"
               title="Move to today"
-              className="text-11.5 text-accent-blue-dark border border-border-medium rounded-btn font-medium hover:bg-accent-blue-bg transition-colors duration-120 whitespace-nowrap flex items-center gap-1 px-2 py-1.5 md:px-2.5"
+              className="text-accent-blue-dark transition-colors duration-120 flex items-center gap-1 p-1 md:p-0 md:border md:border-border-medium md:rounded-btn md:font-medium md:hover:bg-accent-blue-bg md:px-2.5 md:py-1.5 md:text-11.5 md:whitespace-nowrap"
             >
-              {/* Text label on md+ (desktop / landscape tablet), icon-only on mobile portrait */}
-              <ArrowRightIcon size={12} />
+              <ArrowRightIcon size={14} />
               <span className="hidden md:inline">Move to today</span>
             </button>
           )}
