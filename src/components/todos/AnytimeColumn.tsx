@@ -39,7 +39,13 @@ export function AnytimeColumn({ todos }: { todos: Todo[] }) {
   const hidden = filtered.length - visible.length;
 
   return (
-    <aside className="w-full border-l border-border-default bg-bg-surface px-6 py-[26px] flex flex-col gap-3 self-start sticky top-[52px] max-h-[calc(100vh-52px)] overflow-y-auto overscroll-none">
+    /*
+      Sticky against the list's scroll region, not the viewport: `/todo` scrolls
+      a box inside the page, so `top` is measured from that box's top edge and
+      `52px` (the navbar, which is not in the chain any more) held it a
+      navbar's-height too low.
+    */
+    <aside className="w-full border-l border-border-default bg-bg-surface px-6 py-[26px] flex flex-col gap-3 self-start sticky top-0 max-h-[var(--todo-scroll-h,calc(100vh-52px))] overflow-y-auto overscroll-none">
       <div className="flex items-center gap-2">
         <h2 className="m-0 font-serif text-[19px] font-normal text-[color:var(--heading-color)]" style={{ letterSpacing: '-0.015em' }}>
           Anytime

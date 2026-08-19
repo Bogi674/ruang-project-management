@@ -808,12 +808,33 @@ past either end appends the neighbouring period, and explicit "Earlier / Later"
 buttons cover the case where a quiet week is too short to scroll at all. Empty
 days are laid out too — a day you have not filled is still where Friday's work
 goes, and in Month view it folds to a one-line `quiet` group that is still a
-drop target with its own add button. Two details are easy to break: the
-backward sentinel must have **no** rootMargin and must check `scrollY > 0`, or
-it fires on mount and walks backwards on its own; and both observers must be
-rebuilt when the range changes, because an IntersectionObserver only reports
-threshold *crossings* and the sentinel does not move when a period is appended
-below it.
+drop target with its own add button.
+
+Four details are easy to break, and three of them shipped broken once:
+
+- The backward sentinel takes **no** rootMargin and must be a real distance
+  (`BACKWARD_TRIGGER_PX`) from the top edge, or it fires on mount and walks
+  backwards on its own.
+- Both observers must be rebuilt when the range changes, because an
+  IntersectionObserver only reports threshold *crossings* and the sentinel does
+  not move when a period is appended below it.
+- **The scroll correction after a prepend must be instant, and only one prepend
+  may be in flight.** Prepending shifts everything below the sentinel down by
+  the height of the new period, and the offset is corrected by that much in a
+  layout effect so nothing moves under the pointer. Animate that correction and
+  it is not a correction: the offset stays wrong for the length of the
+  animation, the sentinel is still on screen the whole time, and the list
+  prepends again every frame — one flick of the wheel reached the MAX_REACH
+  clamp six months out and kept going after the user let go. `scroll-behavior:
+  smooth` on the document is what made it animate, which is why globals.css no
+  longer sets it, and `settling` in PeriodView is what holds the second request
+  until the first has landed.
+- **The scroller is not the window.** `/todo` fills the content area and scrolls
+  a region inside itself (`data-app-scroll`), so the range bar stays put and the
+  page does not slide under the fixed navbar. Every measurement — the height to
+  anchor against, the offset to test, the observer root, the drag auto-scroll —
+  goes through `lib/scrollHost.ts`, which takes `null` to mean "the document" so
+  the same code works on a screen that lets the document scroll.
 
 **"Anytime", not "Unassigned".** Unassigned names a missing field; the list
 actually holds work that is real and wanted but not owed to a particular day.
@@ -1084,6 +1105,7 @@ src/
     keyboardInset.ts           -- useKeyboardInset(): publishes --kb-inset for the docked toolbar
     ownership.ts               -- ownsNote / ownsSpace / ownsWidget / isUuid (see rule 10)
     ratelimit.ts               -- in-memory fixed-window limiter (per-instance; see SECURITY_REVIEW.md)
+    scrollHost.ts              -- which box is scrolling (data-app-scroll) + instant, never-animated scrolls
     spaces.ts                  -- useSpaces hook (fetches + caches spaces tree)
     spaceColor.ts              -- spaceChipStyle() + spaceDotColor() dynamic color derivation
     resend.ts                  -- sendReminderEmail() + sendVerificationEmail() via Resend SDK
