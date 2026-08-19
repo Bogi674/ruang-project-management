@@ -22,7 +22,7 @@ import { useTodos } from './TodoProvider';
  * switching range re-flowed every row and the same to-do was a different width
  * depending on which tab you were on.
  */
-const COLUMN = 'w-full max-w-[920px] mx-auto px-8 pt-[26px] pb-8 flex flex-col density-stack';
+const COLUMN = 'w-full max-w-[920px] mx-auto px-4 md:px-8 pt-[26px] pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-8 flex flex-col density-stack';
 
 export function TodoListView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement> }) {
   const { groups, filter, loading } = useTodos();

@@ -155,7 +155,7 @@ export function TodoProvider({
   const [counts, setCounts] = useState(initialGroups?.counts ?? EMPTY_GROUPS.counts);
   const [loading, setLoading] = useState(!initialGroups);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilterState] = useState<TodoFilter>(initialFilter ?? 'today');
+  const [filter, setFilterState] = useState<TodoFilter>(initialFilter ?? 'week');
   const [spaceFilter, setSpaceFilter] = useState<string | null>(null);
   const [openTodoId, setOpenTodoId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
@@ -180,7 +180,7 @@ export function TodoProvider({
    */
   useEffect(() => {
     if (!initialFilter) {
-      setFilterState(readStored<TodoFilter>(FILTER_KEY, ['today', 'week', 'month', 'all'], 'today'));
+      setFilterState(readStored<TodoFilter>(FILTER_KEY, ['today', 'week', 'month', 'all'], 'week'));
     }
   }, [initialFilter]);
 

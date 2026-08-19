@@ -126,11 +126,11 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
       data-drop-index={index}
       data-todo-id={todo.id}
       onKeyDown={handleKeyDown}
-      className={`group bg-bg-base border rounded-card transition-shadow duration-120 ${
+      className={`group bg-bg-base border rounded-card transition-shadow duration-120 select-none ${
         compact ? 'border-border-default' : 'border-border-default shadow-card'
       } ${dragged ? 'opacity-40 border-dashed' : ''}`}
     >
-      <div className={`flex gap-3 px-4 ${todo.description ? 'items-start py-3.5' : 'items-center py-3.5'}`}>
+      <div className={`flex gap-3 px-4 ${todo.description ? 'items-start py-3.5' : 'items-center py-3'}`}>
         {/*
           The grip is the drag handle, not the whole row: a row that drags from
           anywhere cannot be scrolled past on a phone, and cannot hold a link.
@@ -142,7 +142,7 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
           onPointerDown={(e) => start(e, todo, groupKey)}
           aria-label={`Reorder ${todo.title}`}
           title="Drag to reorder — or Ctrl + ↑ / ↓"
-          className="flex-shrink-0 text-border-medium opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity duration-120 cursor-grab active:cursor-grabbing touch-none"
+          className="flex-shrink-0 text-border-medium opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity duration-120 cursor-grab active:cursor-grabbing touch-none select-none"
           style={{ marginTop: todo.description ? 2 : 0 }}
         >
           <GripIcon size={14} />
@@ -156,12 +156,13 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
           disabledReason="Finish the sub-tasks first — this to-do is set to Dependent"
         />
 
-        <div className="flex-1 min-w-0 flex flex-col gap-[5px]">
-          <div className="flex items-center gap-[9px] flex-wrap">
+        <div className="flex-1 min-w-0 flex flex-col gap-[4px]">
+          {/* Title row — time/overdue/repeat chips stay inline with the title */}
+          <div className="flex items-center gap-[7px] flex-wrap">
             <button
               type="button"
               onClick={() => setOpenTodoId(todo.id)}
-              className="text-13.5 text-text-primary text-left hover:underline decoration-border-medium underline-offset-2"
+              className="text-13.5 text-text-primary text-left hover:underline decoration-border-medium underline-offset-2 select-none"
               style={{ fontWeight: emphasised ? 580 : 400, letterSpacing: '-0.005em' }}
             >
               {todo.title}
@@ -174,28 +175,31 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
             )}
             {todo.recurrence && <RepeatChip recurrence={todo.recurrence} />}
             {todo.reminder && <ReminderChip lead={todo.reminder.lead} />}
-
-            {todo.space && (
-              <span className="ml-auto">
-                <SpaceChip color={todo.space.color} name={todo.space.name} />
-              </span>
-            )}
           </div>
 
-          {todo.description && !compact && (
-            <p className="m-0 text-12 text-text-muted leading-[1.5]">{todo.description}</p>
-          )}
-
-          {(todo.attachments?.length || progress) && !compact ? (
-            <div className="flex items-center gap-[7px] flex-wrap mt-[3px]">
-              <AttachmentChips todo={todo} />
-              {progress && (
-                <span className="ml-1">
-                  <SubtaskProgress done={progress.done} total={progress.total} />
-                </span>
+          {/* Meta row — space chip + description + attachments below the title */}
+          {(todo.space || (todo.description && !compact) || ((todo.attachments?.length || progress) && !compact)) && (
+            <div className="flex flex-col gap-[3px]">
+              {todo.space && (
+                <div className="flex items-center gap-[5px]">
+                  <SpaceChip color={todo.space.color} name={todo.space.name} />
+                </div>
               )}
+              {todo.description && !compact && (
+                <p className="m-0 text-12 text-text-muted leading-[1.5]">{todo.description}</p>
+              )}
+              {(todo.attachments?.length || progress) && !compact ? (
+                <div className="flex items-center gap-[7px] flex-wrap">
+                  <AttachmentChips todo={todo} />
+                  {progress && (
+                    <span className="ml-1">
+                      <SubtaskProgress done={progress.done} total={progress.total} />
+                    </span>
+                  )}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
         </div>
 
         <div className="flex items-start gap-2 flex-shrink-0 text-text-faint" style={{ marginTop: 2 }}>
