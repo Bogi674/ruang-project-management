@@ -207,9 +207,13 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
             <button
               type="button"
               onClick={() => updateTodo(todo.id, { due_date: today })}
-              className="text-11.5 text-accent-blue-dark border border-border-medium rounded-btn px-2.5 py-1.5 font-medium hover:bg-accent-blue-bg transition-colors duration-120 whitespace-nowrap"
+              aria-label="Move to today"
+              title="Move to today"
+              className="text-11.5 text-accent-blue-dark border border-border-medium rounded-btn font-medium hover:bg-accent-blue-bg transition-colors duration-120 whitespace-nowrap flex items-center gap-1 px-2 py-1.5 md:px-2.5"
             >
-              Move to today
+              {/* Text label on md+ (desktop / landscape tablet), icon-only on mobile portrait */}
+              <ArrowRightIcon size={12} />
+              <span className="hidden md:inline">Move to today</span>
             </button>
           )}
           <button

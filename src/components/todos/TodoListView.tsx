@@ -124,17 +124,9 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
         <QuickAdd showShortcut />
       </div>
 
-      {/* Carried-over work sits above today's own list under every filter —
-          see OverdueGroup for why it is amber and phrased the way it is. */}
-      <OverdueGroup todos={overdue} />
-
-      {nothingLeft ? (
-        <EmptyState
-          variant={done.length > 0 ? 'all-done' : 'nothing-today'}
-          doneCount={done.length}
-          unassignedCount={groups.unassigned.length}
-        />
-      ) : (
+      {/* Today's own open tasks come first so they are never buried by the
+          amber carried-over card, which can be tall when there is a backlog. */}
+      {open.length > 0 ? (
         <TodoGroup
           groupKey={today}
           title={`Today · ${open.length}`}
@@ -144,7 +136,16 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
           cap={prefs.todayCap}
           addRow={{ dueDate: today, label: 'Add to today' }}
         />
-      )}
+      ) : overdue.length === 0 ? (
+        <EmptyState
+          variant={done.length > 0 ? 'all-done' : 'nothing-today'}
+          doneCount={done.length}
+          unassignedCount={groups.unassigned.length}
+        />
+      ) : null}
+
+      {/* Carried-over work sits below today's own list so today always leads. */}
+      <OverdueGroup todos={overdue} />
 
       {/*
         Anytime is shown on Today as well, folded to a few rows. Without it
