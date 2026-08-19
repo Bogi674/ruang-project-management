@@ -138,10 +138,15 @@ export function TodoProvider({
   children,
   initialGroups,
   initialFilter,
+  serverToday,
 }: {
   children: React.ReactNode;
   initialGroups?: TodoGroups | null;
   initialFilter?: TodoFilter;
+  /** The server's local date string. When it differs from the client's date the
+   *  SSR payload is for the wrong day (timezone mismatch) and must not be used
+   *  to skip the first client fetch. */
+  serverToday?: string;
 }) {
   const { preferences } = usePreferences();
   const prefs = useMemo(
@@ -206,7 +211,13 @@ export function TodoProvider({
   // after the filter has already moved on.
   const [reloadToken, setReloadToken] = useState(0);
   const requestId = useRef(0);
-  const skipNextFetch = useRef(Boolean(initialGroups));
+  // Only skip the first fetch when SSR data is for today's actual date.
+  // A timezone mismatch (Vercel UTC vs user's local clock) means the server
+  // rendered yesterday's todos; in that case skip=false forces an immediate
+  // client fetch with the correct date.
+  const skipNextFetch = useRef(
+    Boolean(initialGroups) && (!serverToday || serverToday === todayISO())
+  );
 
   const refresh = useCallback(() => setReloadToken((t) => t + 1), []);
 
@@ -540,9 +551,7 @@ export function TodoProvider({
           body: JSON.stringify(entries),
         });
         if (!res.ok) throw new Error();
-        const body = (await res.json()) as { updated: number; requested: number };
-        if (body.updated !== body.requested) refresh();
-        else scheduleResync();
+        scheduleResync();
       } catch {
         setError('Could not save the new order');
         refresh();

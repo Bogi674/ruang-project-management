@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { authOptions } from '@/lib/auth';
 import { createServerClient } from '@/lib/supabase';
 import { loadTodoGroups } from '@/lib/todoQuery';
+import { todayISO } from '@/lib/todos';
 import type { TodoFilter } from '@/types';
 import { TodoClient } from './TodoClient';
 
@@ -40,6 +41,7 @@ export default async function TodoPage({
 
   // A failed load is not a failed page: the client refetches and shows its own
   // error, which is a far better outcome than a 500 on the To-do tab.
+  const serverToday = todayISO();
   const { groups } = await loadTodoGroups(createServerClient(), userId, { filter });
 
   return (
@@ -47,6 +49,7 @@ export default async function TodoPage({
       <TodoClient
         initialGroups={groups}
         initialFilter={requested ? filter : undefined}
+        serverToday={serverToday}
       />
     </Suspense>
   );
