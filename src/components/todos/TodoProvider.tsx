@@ -158,7 +158,16 @@ export function TodoProvider({
     initialGroups ? flatten(initialGroups) : []
   );
   const [counts, setCounts] = useState(initialGroups?.counts ?? EMPTY_GROUPS.counts);
-  const [loading, setLoading] = useState(!initialGroups);
+  /*
+   * The SSR payload is only usable when the server and the browser agree on
+   * what day it is. They do not for seven hours a day in UTC+7: the server
+   * renders the wrong day's window, the corrective fetch is already on its way,
+   * and treating the stale payload as loaded paints "Nothing due today" over a
+   * full list before replacing it. Staying in the loading state shows the
+   * skeleton instead, which is honest and does not flash.
+   */
+  const staleInitial = Boolean(initialGroups) && Boolean(serverToday) && serverToday !== todayISO();
+  const [loading, setLoading] = useState(!initialGroups || staleInitial);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilterState] = useState<TodoFilter>(initialFilter ?? 'today');
   const [spaceFilter, setSpaceFilter] = useState<string | null>(null);
@@ -211,13 +220,9 @@ export function TodoProvider({
   // after the filter has already moved on.
   const [reloadToken, setReloadToken] = useState(0);
   const requestId = useRef(0);
-  // Only skip the first fetch when SSR data is for today's actual date.
-  // A timezone mismatch (Vercel UTC vs user's local clock) means the server
-  // rendered yesterday's todos; in that case skip=false forces an immediate
-  // client fetch with the correct date.
-  const skipNextFetch = useRef(
-    Boolean(initialGroups) && (!serverToday || serverToday === todayISO())
-  );
+  // Only skip the first fetch when the SSR payload is for the browser's own
+  // date — see `staleInitial` above.
+  const skipNextFetch = useRef(Boolean(initialGroups) && !staleInitial);
 
   const refresh = useCallback(() => setReloadToken((t) => t + 1), []);
 
@@ -339,7 +344,7 @@ export function TodoProvider({
     emitTodosChanged();
     if (resyncTimer.current) window.clearTimeout(resyncTimer.current);
     resyncTimer.current = window.setTimeout(() => {
-      fetch('/api/todos?count=true')
+      fetch(`/api/todos?count=true&today=${todayISO()}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((next: TodoGroups['counts'] | null) => {
           if (next) setCounts(next);
