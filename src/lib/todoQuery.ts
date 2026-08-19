@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { filterRange, monthRange, sortByPosition, todayISO, weekRange } from './todos';
+import { filterRange, fromISODate, monthRange, sortByPosition, todayISO, weekRange } from './todos';
 import type { Todo, TodoFilter, TodoGroups } from '@/types';
 
 /**
@@ -78,7 +78,19 @@ export async function loadTodoGroups(
   let query = db.from('todos').select(TODO_SELECT).eq('user_id', userId);
   if (spaceId) query = query.eq('space_id', spaceId);
 
-  const range = explicitRange ?? filterRange(filter);
+  /*
+   * The window is derived from the *caller's* date, not the server's.
+   *
+   * This is the whole timezone fix and it has to happen here, not just in the
+   * grouping below. Vercel runs UTC; a user in UTC+7 spends seven hours a day
+   * in a window where the server's `todayISO()` is the previous calendar day.
+   * With the range built from the server clock, `filter=today` asked for
+   * `due_date BETWEEN <yesterday> AND <yesterday>` — so the caller's actual
+   * today never came back from the database at all, and no amount of correct
+   * grouping afterwards could put a row on screen that was never fetched.
+   * Week and Month hid the bug because they send an explicit range.
+   */
+  const range = explicitRange ?? filterRange(filter, fromISODate(today));
   if (range) {
     /*
      * Not a plain BETWEEN. The window is "inside the range, OR undated, OR
@@ -104,7 +116,7 @@ export async function loadTodoGroups(
    */
   const [rowsResult, counts] = await Promise.all([
     query,
-    withCounts ? loadTodoCounts(db, userId) : Promise.resolve(EMPTY_COUNTS),
+    withCounts ? loadTodoCounts(db, userId, today) : Promise.resolve(EMPTY_COUNTS),
   ]);
 
   if (rowsResult.error) return { groups: null, error: rowsResult.error.message };
@@ -169,11 +181,15 @@ export function groupTodos(rows: Todo[], counts: TodoGroups['counts'], today: st
  */
 export async function loadTodoCounts(
   db: SupabaseClient,
-  userId: string
+  userId: string,
+  clientToday: string | null = null
 ): Promise<TodoGroups['counts']> {
-  const today = todayISO();
-  const week = weekRange();
-  const month = monthRange();
+  // Same reason as the window above: "tomorrow" and "rest of week" are the
+  // caller's, not the server's.
+  const today = clientToday ?? todayISO();
+  const from = fromISODate(today);
+  const week = weekRange(from);
+  const month = monthRange(from);
 
   const { data, error } = await db
     .from('todos')

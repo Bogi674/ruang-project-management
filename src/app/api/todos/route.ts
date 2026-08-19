@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   // The sidebar badge wants one number, not every row for the window. Skipping
   // the row query keeps a count that refreshes on every navigation cheap.
   if (url.searchParams.get('count') === 'true') {
-    return NextResponse.json(await loadTodoCounts(createServerClient(), userId!));
+    return NextResponse.json(await loadTodoCounts(createServerClient(), userId!, clientToday));
   }
 
   const { groups, error: loadError } = await loadTodoGroups(createServerClient(), userId!, {
