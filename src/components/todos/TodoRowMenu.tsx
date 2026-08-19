@@ -47,7 +47,7 @@ export function TodoRowMenu({
       {todo.due_date !== tomorrow && (
         <MenuItem onClick={() => move(tomorrow, 'tomorrow')}>Move to tomorrow</MenuItem>
       )}
-      {todo.due_date && <MenuItem onClick={() => move(null, 'Unassigned')}>Remove the date</MenuItem>}
+      {todo.due_date && <MenuItem onClick={() => move(null, 'Anytime')}>Remove the date</MenuItem>}
       <div className="h-px bg-border-light mx-2 my-1" />
       <MenuItem
         danger

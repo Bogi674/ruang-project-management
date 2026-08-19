@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { getInitials } from '@/lib/utils';
 import { usePreferences, type PreferenceSaveError } from '@/lib/preferences';
-import { ACCENT_PRESETS, resolveTheme } from '@/lib/theme';
+import { ACCENT_PRESETS, COLOR_SCHEMES, resolveTheme } from '@/lib/theme';
 
 interface SettingsClientProps {
   name: string;
@@ -530,12 +530,86 @@ function AppearanceTab({
         <SaveErrorNote error={saveError} field="theme_preference" />
       </section>
 
+      {/* Colour scheme */}
+      <section>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-1.5">
+          Colour Scheme
+        </p>
+        <p className="text-[12px] text-text-muted mb-4 leading-[1.5]">
+          Sets the accent and the signal colours — done, carried over, delete. The page itself stays
+          as it is.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {COLOR_SCHEMES.map((scheme) => {
+            const active = (preferences.color_scheme || 'calm') === scheme.value;
+            // Calm has no colours of its own — it is the tokens as written in
+            // globals.css — so its swatches come from the live custom
+            // properties instead, and follow the accent picker below.
+            const swatches = scheme.accent
+              ? [scheme.accent, scheme.green!, scheme.amber!, scheme.danger!]
+              : ['var(--accent-blue)', 'var(--accent-green-solid)', 'var(--accent-amber)', 'var(--danger)'];
+
+            return (
+              <button
+                key={scheme.value}
+                onClick={() =>
+                  /*
+                   * The accent override is cleared at the same time.
+                   *
+                   * `resolveTheme` lets an explicit `accent_color` win over the
+                   * scheme's own accent, so without this a scheme would change
+                   * the signal colours and leave the buttons the old colour —
+                   * which reads as the setting half-working.
+                   */
+                  updatePreferences({ color_scheme: scheme.value, accent_color: null })
+                }
+                aria-pressed={active}
+                className="text-left rounded-[10px] border p-3 transition-colors duration-120"
+                style={{
+                  background: active ? 'var(--accent-blue-bg)' : 'var(--bg-surface)',
+                  borderColor: active ? 'var(--accent-blue)' : 'var(--border-medium)',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex gap-1">
+                    {swatches.map((colour, i) => (
+                      <span
+                        key={i}
+                        className="w-3.5 h-3.5 rounded-full"
+                        style={{ background: colour, boxShadow: '0 0 0 1px rgba(0,0,0,0.06)' }}
+                      />
+                    ))}
+                  </div>
+                  <span
+                    className="text-[13px]"
+                    style={{
+                      color: active ? 'var(--accent-blue-dark)' : 'var(--text-primary)',
+                      fontWeight: active ? 600 : 500,
+                    }}
+                  >
+                    {scheme.label}
+                  </span>
+                </div>
+                <span className="text-[11.5px] text-text-muted leading-[1.45]">
+                  {scheme.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <SaveErrorNote error={saveError} field="color_scheme" />
+      </section>
+
       {/* Accent color */}
       <section>
-        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-4">Accent Color</p>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-1.5">Accent Colour</p>
+        <p className="text-[12px] text-text-muted mb-4 leading-[1.5]">
+          Overrides whichever accent the scheme brought with it. The signal colours stay as the
+          scheme set them.
+        </p>
         <div className="flex items-center gap-2.5 flex-wrap">
           {ACCENT_PRESETS.map(({ label, value }) => {
-            const active = (preferences.accent_color || '#A1B5D8') === value;
+            const active = preferences.accent_color === value;
             return (
               <button
                 key={value}

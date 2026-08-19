@@ -10,19 +10,24 @@ import { GripIcon } from './icons';
 import { useTodoActions } from './TodoProvider';
 
 /** Rows past this fold behind a "+N more" until asked. */
-const VISIBLE = 5;
+const VISIBLE = 8;
 
 /**
- * The All view's right-hand column.
+ * Anytime — the All view's right-hand column.
  *
- * Undated to-dos get their own column rather than a group at the bottom of the
- * scroll, and that is the point of the whole layout: with a few weeks of dated
- * work in the list, an "Unassigned" group at the end is somewhere you never
- * scroll to, so anything without a date quietly stops existing.
+ * "Anytime" rather than "Unassigned". Unassigned describes a missing field;
+ * what this list actually holds is work that is real and wanted but not owed to
+ * a particular day — the things you do when a gap appears. Naming it after the
+ * absence made it read as an inbox of half-finished data entry, which is
+ * exactly the wrong feeling for the list you are meant to browse when you have
+ * a spare twenty minutes.
+ *
+ * It takes 40% of the page rather than a 300px rail, because in All it is not a
+ * margin note: it is the other half of the answer to "what could I be doing".
  *
  * It is also a drop target — dragging a row here clears its date.
  */
-export function UnassignedColumn({ todos }: { todos: Todo[] }) {
+export function AnytimeColumn({ todos }: { todos: Todo[] }) {
   const { spaces } = useSpaces();
   const { dropIndexFor, draggingId } = useTodoDrag();
   const [expanded, setExpanded] = useState(false);
@@ -34,17 +39,19 @@ export function UnassignedColumn({ todos }: { todos: Todo[] }) {
   const hidden = filtered.length - visible.length;
 
   return (
-    <aside className="w-[300px] flex-shrink-0 border-l border-border-default bg-bg-surface px-4 py-5 flex flex-col gap-3 self-start sticky top-[52px] max-h-[calc(100vh-52px)] overflow-y-auto overscroll-none">
+    <aside className="w-full border-l border-border-default bg-bg-surface px-6 py-[26px] flex flex-col gap-3 self-start sticky top-[52px] max-h-[calc(100vh-52px)] overflow-y-auto overscroll-none">
       <div className="flex items-center gap-2">
-        <h2 className="m-0 text-13.5 font-semibold text-text-primary">Unassigned</h2>
+        <h2 className="m-0 font-serif text-[19px] font-normal text-[color:var(--heading-color)]" style={{ letterSpacing: '-0.015em' }}>
+          Anytime
+        </h2>
         <span className="text-10 font-semibold bg-accent-green text-accent-green-dark rounded-full px-[7px] py-[2px]">
           {todos.length}
         </span>
       </div>
 
-      <p className="m-0 text-11.5 text-text-muted leading-[1.5]">
-        Held in its own column so it never sinks below the dated days. Drag one onto a date to
-        schedule it.
+      <p className="m-0 text-12 text-text-muted leading-[1.55]">
+        Things worth doing that no day is waiting on. Drag one onto a date when it becomes this
+        week&rsquo;s problem.
       </p>
 
       <QuickAdd
@@ -72,14 +79,14 @@ export function UnassignedColumn({ todos }: { todos: Todo[] }) {
         {visible.map((todo, index) => (
           <Fragment key={todo.id}>
             {dropIndex === index && <DropIndicator />}
-            <UnassignedRow todo={todo} index={index} dragged={draggingId === todo.id} />
+            <AnytimeRow todo={todo} index={index} dragged={draggingId === todo.id} />
           </Fragment>
         ))}
         {dropIndex !== null && dropIndex >= visible.length && <DropIndicator />}
 
         {filtered.length === 0 && (
           <p className="m-0 text-11.5 text-text-faint py-2">
-            {spaceFilter ? 'Nothing undated in this space.' : 'Nothing waiting. Rare and good.'}
+            {spaceFilter ? 'Nothing here in this space.' : 'Nothing waiting. Rare and good.'}
           </p>
         )}
       </div>
@@ -97,8 +104,8 @@ export function UnassignedColumn({ todos }: { todos: Todo[] }) {
   );
 }
 
-/** A narrower row than TodoRow — the column is 300px and has no room for chips. */
-const UnassignedRow = memo(function UnassignedRow({
+/** A narrower row than TodoRow — this column has no room for the chip rail. */
+const AnytimeRow = memo(function AnytimeRow({
   todo,
   index,
   dragged,

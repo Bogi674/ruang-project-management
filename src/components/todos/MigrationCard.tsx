@@ -98,7 +98,7 @@ export function MigrationCard() {
         You have {candidates.length} checklist note{candidates.length === 1 ? '' : 's'}
       </h2>
       <p className="m-0 text-12.5 text-text-secondary leading-[1.55]">
-        Their items become real to-dos — unassigned, in the same order, keeping their space. The
+        Their items become real to-dos — filed under Anytime, in the same order, keeping their space. The
         note stays and links to them.
       </p>
 

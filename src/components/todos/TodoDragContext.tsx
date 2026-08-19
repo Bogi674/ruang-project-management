@@ -27,7 +27,7 @@ import { useTodos } from './TodoProvider';
  * Drop targets are found by hit-testing the DOM rather than by registering
  * callbacks: a group marks itself with `data-drop-group`, each row inside it
  * with `data-drop-index`, and the controller reads those on every move. Groups
- * therefore work anywhere — the list, the calendar cells, the Unassigned
+ * therefore work anywhere — the list, the calendar cells, the Anytime
  * column — without wiring anything through React.
  *
  * ── What makes it fast ──
@@ -50,7 +50,7 @@ const AUTOSCROLL_EDGE_PX = 72;
 const AUTOSCROLL_MAX_PX = 18;
 
 export interface DropTarget {
-  /** ISO date, '' for unassigned, or a caller-defined key like 'overdue'. */
+  /** ISO date, '' for Anytime (no date), or a caller-defined key like 'overdue'. */
   groupKey: string;
   /** Insertion index within the group. */
   index: number;
@@ -247,7 +247,7 @@ export function TodoDragProvider({ children }: { children: React.ReactNode }) {
                 weekday: 'long',
                 day: 'numeric',
               })}`
-            : `Moved ${todo.title} to Unassigned`
+            : `Moved ${todo.title} to Anytime`
         );
       } else {
         announce(`Moved ${todo.title} to position ${index + 1}`);

@@ -347,7 +347,7 @@ export function CalendarView({ year, month, day, scheduledNotes, unscheduledNote
   }));
 
   // Undated to-dos share the tray with undated notes. This is what the /todo
-  // calendar's own "Unassigned" column used to be; there is one tray now.
+  // calendar's own Anytime column used to be; there is one tray now.
   const todoPaneItems: PaneItem[] = todoGroups.unassigned.map(t => ({
     id: t.id,
     kind: 'todo' as const,

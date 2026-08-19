@@ -101,6 +101,7 @@ const EDITABLE = [
   'density_preference',
   'landing_page_preference',
   'theme_preference',
+  'color_scheme',
   'app_background_preference',
   'background_tint_preference',
   'todo_default_assignment',

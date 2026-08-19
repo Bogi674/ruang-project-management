@@ -63,11 +63,13 @@ const TODO_PREFERENCE_COLUMNS =
 
 /**
  * Newest tier first. Each fallback drops the most recent migration's columns,
- * so a database missing phase 7 still gets its appearance settings and a
- * database missing phase 3 still gets its theme — rather than all of them
- * failing together, which is the whole point of the tiering.
+ * so a database missing phase 9 still gets its to-do settings, one missing
+ * phase 7 still gets its appearance settings, and one missing phase 3 still
+ * gets its theme — rather than all of them failing together, which is the whole
+ * point of the tiering.
  */
 const PREFERENCE_TIERS = [
+  `${APPEARANCE_PREFERENCE_COLUMNS}, ${TODO_PREFERENCE_COLUMNS}, color_scheme`,
   `${APPEARANCE_PREFERENCE_COLUMNS}, ${TODO_PREFERENCE_COLUMNS}`,
   APPEARANCE_PREFERENCE_COLUMNS,
   CORE_PREFERENCE_COLUMNS,

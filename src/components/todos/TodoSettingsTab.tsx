@@ -37,7 +37,7 @@ export function TodoSettingsTab({
             value={prefs.assignment}
             options={[
               { value: 'today', label: 'Today' },
-              { value: 'unassigned', label: 'Unassigned' },
+              { value: 'unassigned', label: 'Anytime' },
             ]}
             onChange={(todo_default_assignment) => updatePreferences({ todo_default_assignment })}
           />
