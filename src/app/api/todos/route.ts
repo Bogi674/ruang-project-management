@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
     range = { start: startParam, end: endParam };
   }
 
+  // The caller's local date, used to correct for server/client timezone drift.
+  const clientTodayParam = url.searchParams.get('today');
+  const clientToday = isISODate(clientTodayParam) ? clientTodayParam : null;
+
   // The sidebar badge wants one number, not every row for the window. Skipping
   // the row query keeps a count that refreshes on every navigation cheap.
   if (url.searchParams.get('count') === 'true') {
@@ -47,6 +51,7 @@ export async function GET(req: NextRequest) {
     filter: filterParam as TodoFilter,
     spaceId,
     range,
+    clientToday,
     // A range extension is merged into what is already loaded, so it has no use
     // for the headline totals — and they are the only part of the response that
     // costs a second statement.

@@ -45,8 +45,12 @@ import { useTodoActions, useTodos } from './TodoProvider';
  * with a margin it would be intersecting the moment the page mounted and the
  * list would walk backwards through the calendar on its own before the user had
  * touched anything.
+ *
+ * Kept small (80px) so only one period is loaded at a time — a larger value
+ * caused the observer to fire repeatedly on the rebuilt sentinel and load
+ * several weeks in advance even when the user was scrolling slowly.
  */
-const FORWARD_MARGIN = '700px';
+const FORWARD_MARGIN = '80px';
 
 /**
  * How far from the top edge counts as "asking for the previous period".
@@ -172,7 +176,27 @@ export function PeriodView({
     setFirst(first - 1);
   }, [first]);
 
-  const extendDown = useCallback(() => setLast((l) => Math.min(l + 1, MAX_REACH)), []);
+  /*
+   * Forward extension also needs a one-period-at-a-time guard.
+   *
+   * When the observer is rebuilt after a period is appended, it re-evaluates
+   * immediately. With the old 700px margin that re-evaluation fired again
+   * before the new content had actually pushed the sentinel below the fold,
+   * loading two or three periods in rapid succession even on a slow scroll.
+   * `settlingDown` holds from the append until one animation frame later,
+   * giving the browser a chance to lay out the new period and move the
+   * sentinel out of the trigger zone.
+   */
+  const settlingDown = useRef(false);
+  const extendDown = useCallback(() => {
+    if (settlingDown.current || last >= MAX_REACH) return;
+    settlingDown.current = true;
+    setLast((l) => {
+      const next = Math.min(l + 1, MAX_REACH);
+      requestAnimationFrame(() => { settlingDown.current = false; });
+      return next;
+    });
+  }, [last]);
 
   /*
    * Both observers are rebuilt whenever the range changes, and that is

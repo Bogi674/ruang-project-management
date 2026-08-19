@@ -27,7 +27,7 @@ export function HomeTodoStrip() {
   const today = todayISO();
 
   const load = useCallback(() => {
-    fetch('/api/todos?filter=today')
+    fetch(`/api/todos?filter=today&today=${todayISO()}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: TodoGroups | null) => setGroups(data))
       .catch(() => setGroups(null));
