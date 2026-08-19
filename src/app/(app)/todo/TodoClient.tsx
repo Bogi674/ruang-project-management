@@ -38,6 +38,26 @@ function TodoScreen() {
   const [focusOpen, setFocusOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const composeRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * The height of the scroll region, published as a custom property.
+   *
+   * The Anytime column in the All view is sticky and capped so it scrolls
+   * independently of the dated list beside it, and that cap has to be the
+   * region's height — not the viewport's, which is what it used to read. There
+   * is no CSS unit for "my scrollport", and the region's height depends on the
+   * range bar, which wraps on a narrow window, so it is measured.
+   */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const publish = () => el.style.setProperty('--todo-scroll-h', `${el.clientHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   /*
    * `?compose=1` is how the FAB hands off. On a desktop it focuses the
@@ -107,23 +127,51 @@ function TodoScreen() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-52px)]">
-      <TodoFilterBar onFocus={() => setFocusOpen(true)} />
+    /*
+      The page fills the content area exactly and scrolls a region inside
+      itself, the way the calendar does — it does not grow the document.
+
+      Two things follow from that, and both were asked for. The range bar stays
+      where it is instead of scrolling away, so "which week am I looking at" and
+      the switch to Month are always in reach. And the scrollbar belongs to the
+      list rather than to the window, so the fixed navbar and sidebar are no
+      longer framing a page that slides underneath them.
+
+      No `overflow-hidden` on this box, deliberately. The scroll region's own
+      `min-h-0` already stops it growing past the height, and the overlays below
+      — the detail drawer, focus mode, the undo toast — are `fixed` inside the
+      shell's `.animate-fadeUp`, which keeps a transform after it runs and so is
+      their containing block. An `overflow-hidden` in between would clip them.
+    */
+    <div className="flex flex-col" style={{ height: 'var(--app-content-h)' }}>
+      <div className="flex-shrink-0">
+        <TodoFilterBar onFocus={() => setFocusOpen(true)} />
+      </div>
 
       {error && (
         <p
           role="alert"
-          className="m-0 px-6 py-2.5 text-12 text-danger-dark bg-danger-bg border-b border-danger-border"
+          className="m-0 flex-shrink-0 px-6 py-2.5 text-12 text-danger-dark bg-danger-bg border-b border-danger-border"
         >
           {error}
         </p>
       )}
 
-      <div className="px-8 pt-5 empty:hidden">
-        <MigrationCard />
-      </div>
+      {/*
+        The scroll region. `data-app-scroll` is how PeriodView finds the box it
+        has to anchor against when it prepends a week — see lib/scrollHost.ts.
+      */}
+      <div
+        ref={scrollRef}
+        data-app-scroll=""
+        className="flex-1 min-h-0 overflow-y-auto overscroll-none"
+      >
+        <div className="px-8 pt-5 empty:hidden">
+          <MigrationCard />
+        </div>
 
-      <TodoListView composeRef={composeRef} />
+        <TodoListView composeRef={composeRef} />
+      </div>
 
       <TodoDetailPanel />
       {focusOpen && <FocusMode onClose={() => setFocusOpen(false)} />}

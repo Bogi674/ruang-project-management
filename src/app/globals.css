@@ -145,7 +145,25 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
+    /*
+     * No `scroll-behavior: smooth` here, and that is a fix rather than an
+     * omission.
+     *
+     * It applies to *programmatic* scrolls too, and two features scroll
+     * programmatically for reasons that have nothing to do with taste. The
+     * open-ended Week and Month lists prepend a period and immediately correct
+     * the offset so the content under the pointer does not move; the to-do drag
+     * nudges the list a few pixels per frame when the pointer reaches an edge.
+     * Animating either is not a slower version of the same thing — it is a
+     * different thing. The correction landed hundreds of milliseconds late, the
+     * sentinel that asked for the previous week was still on screen the whole
+     * time, and the list walked backwards through the calendar as fast as it
+     * could render, which is what "scrolls to 2024 on its own" was.
+     *
+     * Nothing in the app relies on smooth scrolling: there are no in-page hash
+     * links and no scrollIntoView calls. If one ever needs it, it belongs on
+     * that scroller, not on the document.
+     */
     /*
      * Kill the rubber-band overscroll on the document.
      *

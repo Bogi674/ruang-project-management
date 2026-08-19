@@ -12,6 +12,12 @@ import {
   weeksOfMonth,
   type Period,
 } from '@/lib/todos';
+import {
+  scrollHeightOf,
+  scrollHostBy,
+  scrollHostFor,
+  scrollTopOf,
+} from '@/lib/scrollHost';
 import type { Todo, TodoGroups } from '@/types';
 import { QuickAdd } from './QuickAdd';
 import { OverdueGroup, TodoGroup } from './TodoGroup';
@@ -35,12 +41,25 @@ import { useTodoActions, useTodos } from './TodoProvider';
  * How far below the fold to reach before loading the next period.
  *
  * Only the *forward* sentinel gets a margin. The backward one has to be
- * genuinely on screen before it fires: it sits near the top of the document, so
+ * genuinely on screen before it fires: it sits near the top of the scroller, so
  * with a margin it would be intersecting the moment the page mounted and the
  * list would walk backwards through the calendar on its own before the user had
  * touched anything.
  */
 const FORWARD_MARGIN = '700px';
+
+/**
+ * How far from the top edge counts as "asking for the previous period".
+ *
+ * The sentinel being on screen is not enough on its own. Prepending corrects the
+ * scroll offset by the height of what was added, and that correction is only
+ * *exact* if nothing else moved in the same frame; a few pixels of drift left
+ * the sentinel still intersecting, the observer fired again, and one flick of
+ * the wheel walked the list back six months. Requiring real distance from the
+ * top absorbs the drift, and the settle guard below makes sure each request is
+ * answered once.
+ */
+const BACKWARD_TRIGGER_PX = 8;
 
 /**
  * The furthest the range will reach in either direction, in periods.
@@ -66,41 +85,92 @@ export function PeriodView({
   const [first, setFirst] = useState(0);
   const [last, setLast] = useState(0);
 
-  // A filter switch remounts with a fresh range rather than keeping however far
-  // the previous one had been scrolled.
-  useEffect(() => {
-    setFirst(0);
-    setLast(0);
-  }, [unit]);
-
   const periods = useMemo(() => {
     const out: Period[] = [];
     for (let offset = first; offset <= last; offset++) out.push(periodFor(unit, offset));
     return out;
   }, [first, last, unit]);
 
+  const rootRef = useRef<HTMLDivElement>(null);
   const topSentinel = useRef<HTMLDivElement>(null);
   const bottomSentinel = useRef<HTMLDivElement>(null);
 
   /*
+   * The box that actually scrolls.
+   *
+   * `/todo` scrolls a region inside the page rather than the document, so every
+   * measurement here — the height to anchor against, the offset to test, the
+   * observer's root — has to be that region. Resolved from the DOM instead of
+   * passed in as a prop so the component still works unchanged if it is ever
+   * mounted somewhere that lets the document scroll: `null` means "the
+   * document", and every helper in lib/scrollHost.ts accepts it.
+   */
+  const host = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    host.current = scrollHostFor(rootRef.current);
+  }, []);
+
+  /*
    * Prepending moves everything below it down by the height of what was added,
    * which would throw the reader to a different part of the list mid-scroll.
-   * The document height is measured before the new period renders and the
-   * difference is added back to the scroll position in a layout effect, so the
+   * The scroller's height is measured before the new period renders and the
+   * difference is added back to the scroll offset in a layout effect, so the
    * content under the pointer does not move at all.
+   *
+   * The correction has to be instant. Animated, it is not a correction: the
+   * offset stays wrong for the length of the animation, the sentinel it was
+   * meant to move off screen is still intersecting, and the list asks for
+   * another period — and another — for as long as the animation lasts. That is
+   * why `scroll-behavior: smooth` is no longer set on the document (see
+   * globals.css) and why the scroll goes through `scrollHostBy`, which passes
+   * `behavior: 'instant'` whatever the stylesheet says.
    */
   const anchor = useRef<number | null>(null);
+
+  /*
+   * One period per request.
+   *
+   * `settling` is held from the moment a prepend is asked for until the frame
+   * after its correction has been applied. Without it the observer, which is
+   * rebuilt on every range change and therefore re-reports the current state,
+   * could ask again before the correction it is reacting to had happened —
+   * turning one gesture into a run of prepends with nothing to stop it but
+   * MAX_REACH.
+   */
+  const settling = useRef(false);
+
+  // A filter switch remounts with a fresh range rather than keeping however far
+  // the previous one had been scrolled. The extension bookkeeping resets with
+  // it — a range that no longer exists must not leave the guard held.
+  useEffect(() => {
+    setFirst(0);
+    setLast(0);
+    anchor.current = null;
+    settling.current = false;
+  }, [unit]);
+
   useLayoutEffect(() => {
     if (anchor.current === null) return;
-    const delta = document.documentElement.scrollHeight - anchor.current;
+    const delta = scrollHeightOf(host.current) - anchor.current;
     anchor.current = null;
-    if (delta > 0) window.scrollBy(0, delta);
+    if (delta > 0) scrollHostBy(host.current, delta);
+    // Released a frame later, once the corrected offset is what the next
+    // intersection callback will read.
+    const frame = requestAnimationFrame(() => {
+      settling.current = false;
+    });
+    return () => cancelAnimationFrame(frame);
   }, [first]);
 
   const extendUp = useCallback(() => {
-    anchor.current = document.documentElement.scrollHeight;
-    setFirst((f) => Math.max(f - 1, -MAX_REACH));
-  }, []);
+    // Clamped before the guard is taken, not after: at the end of the range
+    // `setFirst` would be a no-op, no layout effect would run, and a `settling`
+    // taken here would never be released.
+    if (settling.current || first <= -MAX_REACH) return;
+    settling.current = true;
+    anchor.current = scrollHeightOf(host.current);
+    setFirst(first - 1);
+  }, [first]);
 
   const extendDown = useCallback(() => setLast((l) => Math.min(l + 1, MAX_REACH)), []);
 
@@ -109,8 +179,8 @@ export function PeriodView({
    * load-bearing rather than sloppy dependencies.
    *
    * An IntersectionObserver only calls back when an element *crosses* a
-   * threshold. The sentinel does not move relative to the viewport when a
-   * period is appended below it — it is still the last thing on the page — so
+   * threshold. The sentinel does not move relative to the scroller when a
+   * period is appended below it — it is still the last thing in the list — so
    * it never re-crosses and a single observer would hand back exactly one extra
    * period and then go quiet. Re-observing re-evaluates the current state and
    * fires again if it is still in range, which is also what fills a viewport
@@ -123,7 +193,7 @@ export function PeriodView({
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) extendDown();
       },
-      { rootMargin: `0px 0px ${FORWARD_MARGIN} 0px` }
+      { root: host.current, rootMargin: `0px 0px ${FORWARD_MARGIN} 0px` }
     );
     observer.observe(bottom);
     return () => observer.disconnect();
@@ -132,12 +202,18 @@ export function PeriodView({
   useEffect(() => {
     const top = topSentinel.current;
     if (!top || first <= -MAX_REACH) return;
-    const observer = new IntersectionObserver((entries) => {
-      // `scrollY > 0` is the second half of the guard: at the very top of an
-      // unscrolled document the sentinel is visible by definition, and reacting
-      // to that would extend backwards on mount rather than on a gesture.
-      if (entries.some((e) => e.isIntersecting) && window.scrollY > 0) extendUp();
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // The offset test is the second half of the guard: at rest the sentinel
+        // sits near the top of the list and is visible by definition, so
+        // reacting to intersection alone would extend backwards on mount rather
+        // than on a gesture.
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (scrollTopOf(host.current) <= BACKWARD_TRIGGER_PX) return;
+        extendUp();
+      },
+      { root: host.current }
+    );
     observer.observe(top);
     return () => observer.disconnect();
   }, [extendUp, first]);
@@ -152,7 +228,10 @@ export function PeriodView({
   }, [loadRange, periods]);
 
   return (
-    <div className="w-full max-w-[920px] mx-auto px-8 pt-[26px] pb-8 flex flex-col density-stack">
+    <div
+      ref={rootRef}
+      className="w-full max-w-[920px] mx-auto px-8 pt-[26px] pb-8 flex flex-col density-stack"
+    >
       <div ref={composeRef}>
         <QuickAdd
           placeholder="Add a to-do — type a date, or use the button under any day"

@@ -10,6 +10,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { scrollableAncestor } from '@/lib/scrollHost';
 import { POSITION_STEP, needsRebalance, positionBetween, rebalance } from '@/lib/todos';
 import type { Todo } from '@/types';
 import { useTodos } from './TodoProvider';
@@ -45,7 +46,7 @@ import { useTodos } from './TodoProvider';
 const LONG_PRESS_MS = 350;
 /** A mouse drag starts as soon as the pointer has moved this far from the grip. */
 const MOUSE_THRESHOLD_PX = 4;
-/** How close to the viewport edge before the page starts scrolling itself. */
+/** How close to the scroller's edge before the list starts scrolling itself. */
 const AUTOSCROLL_EDGE_PX = 72;
 const AUTOSCROLL_MAX_PX = 18;
 
@@ -297,15 +298,34 @@ export function TodoDragProvider({ children }: { children: React.ReactNode }) {
       setDragState((current) => (current ? { ...current, target } : current));
     }
 
-    const fromTop = y;
-    const fromBottom = window.innerHeight - y;
+    /*
+     * Auto-scroll, measured against whatever is actually scrolling under the
+     * pointer rather than against the window.
+     *
+     * On `/todo` the list is a region inside the page and on `/calendar` it is
+     * a grid or the unscheduled tray, so `window.scrollBy` moved nothing at all
+     * and a drag could not reach a row below the fold. The edges are the
+     * scroller's own, which is why they are read from its box: with the window
+     * they were 72px from the bottom of the screen, well past the end of a list
+     * that stops above the FAB.
+     */
+    const scroller = scrollableAncestor(document.elementFromPoint(x, y));
+    const bounds = scroller
+      ? scroller.getBoundingClientRect()
+      : { top: 0, bottom: window.innerHeight };
+
+    const fromTop = y - bounds.top;
+    const fromBottom = bounds.bottom - y;
     let delta = 0;
     if (fromTop < AUTOSCROLL_EDGE_PX) {
-      delta = -AUTOSCROLL_MAX_PX * (1 - fromTop / AUTOSCROLL_EDGE_PX);
+      delta = -AUTOSCROLL_MAX_PX * (1 - Math.max(fromTop, 0) / AUTOSCROLL_EDGE_PX);
     } else if (fromBottom < AUTOSCROLL_EDGE_PX) {
-      delta = AUTOSCROLL_MAX_PX * (1 - fromBottom / AUTOSCROLL_EDGE_PX);
+      delta = AUTOSCROLL_MAX_PX * (1 - Math.max(fromBottom, 0) / AUTOSCROLL_EDGE_PX);
     }
-    if (delta) window.scrollBy(0, delta);
+    if (delta) {
+      if (scroller) scroller.scrollTop += delta;
+      else window.scrollBy(0, delta);
+    }
 
     frame.current = window.requestAnimationFrame(tick);
   }, []);
