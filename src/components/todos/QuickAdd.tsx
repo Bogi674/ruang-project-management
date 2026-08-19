@@ -108,7 +108,7 @@ export function QuickAdd({
       className={
         isInline
           ? 'rounded-card border border-dashed border-border-medium px-[15px] py-[11px]'
-          : 'bg-bg-base border border-border-medium rounded-card px-4 py-[13px] shadow-card'
+          : 'bg-bg-base border-[1.5px] border-dashed border-border-medium rounded-card px-4 py-[13px]'
       }
     >
       <div className="flex items-center gap-3">
@@ -233,9 +233,9 @@ export function InlineAddRow({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2.5 w-full rounded-card border border-dashed border-border-medium px-[15px] py-[11px] text-13 text-text-muted hover:text-text-secondary hover:border-border-medium transition-colors duration-120"
+        className="flex items-center gap-2.5 w-full rounded-card border border-dashed border-border-medium px-[15px] py-[11px] text-13 text-text-secondary hover:text-accent-blue-dark hover:border-accent-blue hover:bg-accent-blue-bg transition-colors duration-120"
       >
-        <PlusIcon size={14} className="text-text-faint" />
+        <PlusIcon size={14} className="text-text-muted" />
         {label}
       </button>
     );

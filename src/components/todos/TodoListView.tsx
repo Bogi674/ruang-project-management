@@ -134,7 +134,7 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
           todos={open}
           done={[]}
           cap={prefs.todayCap}
-          addRow={{ dueDate: today, label: 'Add to today' }}
+          addRow={null}
         />
       ) : overdue.length === 0 ? (
         <EmptyState

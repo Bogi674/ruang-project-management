@@ -86,6 +86,16 @@ export function TodoGroup({
   const visible = capped ? todos.slice(0, cap) : todos;
   const hidden = todos.length - visible.length;
 
+  // When showDone=false (period view), DaySection passes [...open, ...done] as
+  // todos for inline strikethrough rendering. Count them correctly rather than
+  // treating every item as open.
+  const openCount = showDone
+    ? todos.length
+    : todos.filter((t) => !t.is_completed).length;
+  const doneCount = showDone
+    ? done.length
+    : todos.filter((t) => t.is_completed).length + done.length;
+
   const headerColor =
     tone === 'overdue'
       ? 'text-accent-amber-dark'
@@ -101,9 +111,9 @@ export function TodoGroup({
         >
           {title}
         </h2>
-        {(todos.length > 0 || done.length > 0) && (
+        {(openCount > 0 || doneCount > 0) && (
           <span className="text-11 text-text-muted">
-            {todos.length} open{done.length > 0 && ` · ${done.length} done`}
+            {openCount} open{doneCount > 0 && ` · ${doneCount} done`}
           </span>
         )}
         <div className="flex-1 h-px bg-border-medium" />

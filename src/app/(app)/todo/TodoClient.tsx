@@ -18,13 +18,16 @@ const ROLLOVER_KEY = 'ruang_todo_rollover_date';
 export function TodoClient({
   initialGroups,
   initialFilter,
+  serverToday,
 }: {
   initialGroups: TodoGroups | null;
   /** Only set when the URL named one; otherwise the client restores its own. */
   initialFilter?: TodoFilter;
+  /** The server's local date when it rendered — used to detect timezone mismatch. */
+  serverToday?: string;
 }) {
   return (
-    <TodoProvider initialGroups={initialGroups} initialFilter={initialFilter}>
+    <TodoProvider initialGroups={initialGroups} initialFilter={initialFilter} serverToday={serverToday}>
       <TodoDragProvider>
         <TodoScreen />
       </TodoDragProvider>
