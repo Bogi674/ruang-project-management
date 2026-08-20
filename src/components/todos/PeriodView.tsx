@@ -23,56 +23,8 @@ import { QuickAdd } from './QuickAdd';
 import { OverdueGroup, TodoGroup } from './TodoGroup';
 import { useTodoActions, useTodos } from './TodoProvider';
 
-/**
- * The Week and Month lists.
- *
- * Both are the same thing at two scales: a titled period, every day inside it
- * laid out whether or not it holds anything, and no end in either direction —
- * scrolling past the top or bottom reveals the neighbouring period.
- *
- * Every day is rendered even when empty, and that is the point rather than an
- * oversight. A list that only shows the days you happen to have filled gives
- * you no sense of the shape of the week, and gives you nowhere to put Friday's
- * work except a date picker. With the day always present, adding to Friday is
- * one click on Friday.
- */
-
-/**
- * How far below the fold to reach before loading the next period.
- *
- * Only the *forward* sentinel gets a margin. The backward one has to be
- * genuinely on screen before it fires: it sits near the top of the scroller, so
- * with a margin it would be intersecting the moment the page mounted and the
- * list would walk backwards through the calendar on its own before the user had
- * touched anything.
- *
- * Kept small (80px) so only one period is loaded at a time — a larger value
- * caused the observer to fire repeatedly on the rebuilt sentinel and load
- * several weeks in advance even when the user was scrolling slowly.
- */
 const FORWARD_MARGIN = '80px';
-
-/**
- * How far from the top edge counts as "asking for the previous period".
- *
- * The sentinel being on screen is not enough on its own. Prepending corrects the
- * scroll offset by the height of what was added, and that correction is only
- * *exact* if nothing else moved in the same frame; a few pixels of drift left
- * the sentinel still intersecting, the observer fired again, and one flick of
- * the wheel walked the list back six months. Requiring real distance from the
- * top absorbs the drift, and the settle guard below makes sure each request is
- * answered once.
- */
 const BACKWARD_TRIGGER_PX = 8;
-
-/**
- * The furthest the range will reach in either direction, in periods.
- *
- * Half a year of weeks, or two years of months. Not a product limit so much as
- * a stop on the auto-extension: if a period ever renders at no height the
- * sentinel would stay in range and the loop would not settle, and an endless
- * list is a worse failure than one that stops.
- */
 const MAX_REACH = 26;
 
 export function PeriodView({
@@ -85,7 +37,6 @@ export function PeriodView({
   const { groups } = useTodos();
   const { loadRange } = useTodoActions();
 
-  // Offsets from the current period, inclusive. Starts as just this one.
   const [first, setFirst] = useState(0);
   const [last, setLast] = useState(0);
 
@@ -98,54 +49,66 @@ export function PeriodView({
   const rootRef = useRef<HTMLDivElement>(null);
   const topSentinel = useRef<HTMLDivElement>(null);
   const bottomSentinel = useRef<HTMLDivElement>(null);
-
-  /*
-   * The box that actually scrolls.
-   *
-   * `/todo` scrolls a region inside the page rather than the document, so every
-   * measurement here — the height to anchor against, the offset to test, the
-   * observer's root — has to be that region. Resolved from the DOM instead of
-   * passed in as a prop so the component still works unchanged if it is ever
-   * mounted somewhere that lets the document scroll: `null` means "the
-   * document", and every helper in lib/scrollHost.ts accepts it.
-   */
   const host = useRef<HTMLElement | null>(null);
+
   useLayoutEffect(() => {
     host.current = scrollHostFor(rootRef.current);
   }, []);
 
-  /*
-   * Prepending moves everything below it down by the height of what was added,
-   * which would throw the reader to a different part of the list mid-scroll.
-   * The scroller's height is measured before the new period renders and the
-   * difference is added back to the scroll offset in a layout effect, so the
-   * content under the pointer does not move at all.
-   *
-   * The correction has to be instant. Animated, it is not a correction: the
-   * offset stays wrong for the length of the animation, the sentinel it was
-   * meant to move off screen is still intersecting, and the list asks for
-   * another period — and another — for as long as the animation lasts. That is
-   * why `scroll-behavior: smooth` is no longer set on the document (see
-   * globals.css) and why the scroll goes through `scrollHostBy`, which passes
-   * `behavior: 'instant'` whatever the stylesheet says.
-   */
-  const anchor = useRef<number | null>(null);
+  // ── Scrollspy state ───────────────────────────────────────────────────────
+  const [activeTitle, setActiveTitle] = useState(() => periodFor(unit, 0).title);
+  const [activeIsNow, setActiveIsNow] = useState(true);
+  const sectionHeaderRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const stickyBarRef = useRef<HTMLDivElement>(null);
 
-  /*
-   * One period per request.
-   *
-   * `settling` is held from the moment a prepend is asked for until the frame
-   * after its correction has been applied. Without it the observer, which is
-   * rebuilt on every range change and therefore re-reports the current state,
-   * could ask again before the correction it is reacting to had happened —
-   * turning one gesture into a run of prepends with nothing to stop it but
-   * MAX_REACH.
-   */
+  // Reset when switching week ↔ month
+  useEffect(() => {
+    setActiveTitle(periodFor(unit, 0).title);
+    setActiveIsNow(true);
+    sectionHeaderRefs.current.clear();
+  }, [unit]);
+
+  // Scroll listener: find which period header most recently passed the sticky bar
+  useEffect(() => {
+    const scrollEl = host.current;
+    if (!scrollEl) return;
+
+    const update = () => {
+      const stickyH = stickyBarRef.current?.offsetHeight ?? 0;
+      const containerTop = scrollEl.getBoundingClientRect().top;
+
+      // Start from the first rendered period and advance whenever a header
+      // has scrolled up past (or flush with) the sticky bar's bottom edge.
+      let currentTitle = periods[0]?.title ?? activeTitle;
+      let currentIsNow = periods[0]?.offset === 0;
+
+      for (const period of periods) {
+        const el = sectionHeaderRefs.current.get(period.offset);
+        if (!el) continue;
+        const elTop = el.getBoundingClientRect().top - containerTop;
+        if (elTop <= stickyH + 2) {
+          currentTitle = period.title;
+          currentIsNow = period.offset === 0;
+        }
+      }
+
+      setActiveTitle(currentTitle);
+      setActiveIsNow(currentIsNow);
+    };
+
+    scrollEl.addEventListener('scroll', update, { passive: true });
+    const frame = requestAnimationFrame(update);
+    return () => {
+      scrollEl.removeEventListener('scroll', update);
+      cancelAnimationFrame(frame);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periods]);
+
+  // ── Prepend / scroll-correction ──────────────────────────────────────────
+  const anchor = useRef<number | null>(null);
   const settling = useRef(false);
 
-  // A filter switch remounts with a fresh range rather than keeping however far
-  // the previous one had been scrolled. The extension bookkeeping resets with
-  // it — a range that no longer exists must not leave the guard held.
   useEffect(() => {
     setFirst(0);
     setLast(0);
@@ -158,8 +121,6 @@ export function PeriodView({
     const delta = scrollHeightOf(host.current) - anchor.current;
     anchor.current = null;
     if (delta > 0) scrollHostBy(host.current, delta);
-    // Released a frame later, once the corrected offset is what the next
-    // intersection callback will read.
     const frame = requestAnimationFrame(() => {
       settling.current = false;
     });
@@ -167,26 +128,12 @@ export function PeriodView({
   }, [first]);
 
   const extendUp = useCallback(() => {
-    // Clamped before the guard is taken, not after: at the end of the range
-    // `setFirst` would be a no-op, no layout effect would run, and a `settling`
-    // taken here would never be released.
     if (settling.current || first <= -MAX_REACH) return;
     settling.current = true;
     anchor.current = scrollHeightOf(host.current);
     setFirst(first - 1);
   }, [first]);
 
-  /*
-   * Forward extension also needs a one-period-at-a-time guard.
-   *
-   * When the observer is rebuilt after a period is appended, it re-evaluates
-   * immediately. With the old 700px margin that re-evaluation fired again
-   * before the new content had actually pushed the sentinel below the fold,
-   * loading two or three periods in rapid succession even on a slow scroll.
-   * `settlingDown` holds from the append until one animation frame later,
-   * giving the browser a chance to lay out the new period and move the
-   * sentinel out of the trigger zone.
-   */
   const settlingDown = useRef(false);
   const extendDown = useCallback(() => {
     if (settlingDown.current || last >= MAX_REACH) return;
@@ -198,18 +145,6 @@ export function PeriodView({
     });
   }, [last]);
 
-  /*
-   * Both observers are rebuilt whenever the range changes, and that is
-   * load-bearing rather than sloppy dependencies.
-   *
-   * An IntersectionObserver only calls back when an element *crosses* a
-   * threshold. The sentinel does not move relative to the scroller when a
-   * period is appended below it — it is still the last thing in the list — so
-   * it never re-crosses and a single observer would hand back exactly one extra
-   * period and then go quiet. Re-observing re-evaluates the current state and
-   * fires again if it is still in range, which is also what fills a viewport
-   * taller than one period on first paint.
-   */
   useEffect(() => {
     const bottom = bottomSentinel.current;
     if (!bottom || last >= MAX_REACH) return;
@@ -228,10 +163,6 @@ export function PeriodView({
     if (!top || first <= -MAX_REACH) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        // The offset test is the second half of the guard: at rest the sentinel
-        // sits near the top of the list and is visible by definition, so
-        // reacting to intersection alone would extend backwards on mount rather
-        // than on a gesture.
         if (!entries.some((e) => e.isIntersecting)) return;
         if (scrollTopOf(host.current) <= BACKWARD_TRIGGER_PX) return;
         extendUp();
@@ -242,8 +173,6 @@ export function PeriodView({
     return () => observer.disconnect();
   }, [extendUp, first]);
 
-  // Each period asks the server for its own slice. Offset 0 is already in the
-  // first payload, and loadRange skips any range it has fetched before.
   useEffect(() => {
     for (const period of periods) {
       if (period.offset === 0) continue;
@@ -252,56 +181,82 @@ export function PeriodView({
   }, [loadRange, periods]);
 
   return (
-    <div
-      ref={rootRef}
-      className="w-full max-w-[920px] mx-auto px-8 pt-[26px] pb-8 flex flex-col density-stack"
-    >
-      <div ref={composeRef}>
-        <QuickAdd
-          placeholder="Add a to-do — type a date, or use the button under any day"
-          showShortcut
-        />
+    <div ref={rootRef} className="w-full max-w-[920px] mx-auto flex flex-col">
+      {/* ── Sticky header: scrollspy title + quick-add ─────────────────── */}
+      <div
+        ref={stickyBarRef}
+        className="sticky top-0 z-10 px-8 pt-[26px] pb-4"
+        style={{ background: 'var(--canvas-base, var(--bg-base))' }}
+      >
+        <header className="flex items-baseline gap-3 flex-wrap mb-3">
+          <h2
+            className="m-0 font-serif text-[22px] font-normal"
+            style={{ letterSpacing: '-0.015em', color: 'var(--heading-color, var(--text-primary))' }}
+          >
+            {activeTitle}
+          </h2>
+          {activeIsNow && (
+            <span className="text-10 font-semibold uppercase tracking-[0.08em] text-accent-blue-dark bg-accent-blue-bg rounded-full px-2 py-[3px]">
+              Now
+            </span>
+          )}
+        </header>
+
+        <div ref={composeRef}>
+          <QuickAdd
+            placeholder="Add a to-do — type a date, or use the button under any day"
+            showShortcut
+          />
+        </div>
       </div>
 
-      {/* Carried-over work is pinned to the top of the list, not filed under
-          the day it slipped from — it is the one thing that must not scroll
-          away with its period. */}
-      <OverdueGroup todos={groups.overdue} />
+      {/* ── Scrollable content ─────────────────────────────────────────── */}
+      <div className="px-8 pb-8 flex flex-col density-stack">
+        <OverdueGroup todos={groups.overdue} />
 
-      {/*
-        The buttons are not a fallback for the scroll — they are the guarantee.
-        A list short enough not to scroll can never fire a sentinel, and on a
-        trackpad the backward one needs the page to be scrolled at all, so
-        without these the previous week would simply be unreachable for anyone
-        whose week is quiet.
-      */}
-      <PeriodStep
-        label={unit === 'week' ? 'Earlier weeks' : 'Earlier months'}
-        direction="up"
-        onClick={extendUp}
-      />
-      <div ref={topSentinel} aria-hidden="true" className="h-px -mt-px" />
+        <PeriodStep
+          label={unit === 'week' ? 'Earlier weeks' : 'Earlier months'}
+          direction="up"
+          onClick={extendUp}
+        />
+        <div ref={topSentinel} aria-hidden="true" className="h-px -mt-px" />
 
-      {periods.map((period) =>
-        unit === 'week' ? (
-          <WeekBlock key={period.offset} period={period} groups={groups} />
-        ) : (
-          <MonthBlock key={period.offset} period={period} groups={groups} />
-        )
-      )}
+        {periods.map((period) =>
+          unit === 'week' ? (
+            <WeekBlock
+              key={period.offset}
+              period={period}
+              groups={groups}
+              onHeaderRef={(el) => {
+                if (el) sectionHeaderRefs.current.set(period.offset, el);
+                else sectionHeaderRefs.current.delete(period.offset);
+              }}
+            />
+          ) : (
+            <MonthBlock
+              key={period.offset}
+              period={period}
+              groups={groups}
+              onHeaderRef={(el) => {
+                if (el) sectionHeaderRefs.current.set(period.offset, el);
+                else sectionHeaderRefs.current.delete(period.offset);
+              }}
+            />
+          )
+        )}
 
-      <div ref={bottomSentinel} aria-hidden="true" className="h-px -mb-px" />
+        <div ref={bottomSentinel} aria-hidden="true" className="h-px -mb-px" />
 
-      <PeriodStep
-        label={unit === 'week' ? 'Later weeks' : 'Later months'}
-        direction="down"
-        onClick={extendDown}
-      />
+        <PeriodStep
+          label={unit === 'week' ? 'Later weeks' : 'Later months'}
+          direction="down"
+          onClick={extendDown}
+        />
+      </div>
     </div>
   );
 }
 
-/** The reach-further control at either end of the range. */
 function PeriodStep({
   label,
   direction,
@@ -323,13 +278,8 @@ function PeriodStep({
   );
 }
 
-/* ── Headers ──────────────────────────────────────────────────────────────
- *
- * A period header is a serif line and a caption, matching the Today page's
- * <h1> rather than the mono section labels the day groups use. That difference
- * is what makes the hierarchy readable when a dozen days are on screen: one
- * typeface says "period", the other says "day inside it".
- */
+/* ── Section headers (remain as in-scroll dividers) ───────────────────────*/
+
 function PeriodHeader({
   period,
   open,
@@ -363,7 +313,6 @@ function PeriodHeader({
   );
 }
 
-/** Counts the open and done rows across a set of days. */
 function tally(groups: TodoGroups, days: string[]) {
   let open = 0;
   let done = 0;
@@ -376,14 +325,24 @@ function tally(groups: TodoGroups, days: string[]) {
 
 /* ── Week ─────────────────────────────────────────────────────────────────*/
 
-function WeekBlock({ period, groups }: { period: Period; groups: TodoGroups }) {
+function WeekBlock({
+  period,
+  groups,
+  onHeaderRef,
+}: {
+  period: Period;
+  groups: TodoGroups;
+  onHeaderRef?: React.RefCallback<HTMLDivElement>;
+}) {
   const today = todayISO();
   const days = daysOfWeek(period.start);
   const { open, done } = tally(groups, days);
 
   return (
     <section className="flex flex-col density-stack">
-      <PeriodHeader period={period} open={open} done={done} current={period.offset === 0} />
+      <div ref={onHeaderRef}>
+        <PeriodHeader period={period} open={open} done={done} current={period.offset === 0} />
+      </div>
       {days.map((day) => (
         <DaySection key={day} day={day} today={today} groups={groups} />
       ))}
@@ -391,13 +350,17 @@ function WeekBlock({ period, groups }: { period: Period; groups: TodoGroups }) {
   );
 }
 
-/* ── Month ────────────────────────────────────────────────────────────────
- *
- * A month is its weeks, and each week is its days — the same blocks the Week
- * view uses, one level down. Rendering a month as a flat run of thirty day
- * headings loses the only structure anyone actually plans against.
- */
-function MonthBlock({ period, groups }: { period: Period; groups: TodoGroups }) {
+/* ── Month ────────────────────────────────────────────────────────────────*/
+
+function MonthBlock({
+  period,
+  groups,
+  onHeaderRef,
+}: {
+  period: Period;
+  groups: TodoGroups;
+  onHeaderRef?: React.RefCallback<HTMLDivElement>;
+}) {
   const today = todayISO();
   const weeks = weeksOfMonth(period.start);
   const monthIndex = period.start.getMonth();
@@ -406,14 +369,14 @@ function MonthBlock({ period, groups }: { period: Period; groups: TodoGroups }) 
 
   return (
     <section className="flex flex-col density-stack">
-      <PeriodHeader period={period} open={open} done={done} current={period.offset === 0} />
+      <div ref={onHeaderRef}>
+        <PeriodHeader period={period} open={open} done={done} current={period.offset === 0} />
+      </div>
 
       {weeks.map((monday) => {
         const days = daysOfWeek(monday);
         const week = tally(groups, days);
         const iso = toISODate(monday);
-        // A week whose Monday sits in the previous month is named with that
-        // month, so "Week 4" never means two different weeks on one screen.
         const label =
           monday.getMonth() === monthIndex
             ? `Week ${weekOfMonth(monday)}`
@@ -456,13 +419,6 @@ function MonthBlock({ period, groups }: { period: Period; groups: TodoGroups }) 
 
 /* ── Day ──────────────────────────────────────────────────────────────────*/
 
-/**
- * One day, always rendered.
- *
- * `addRow` is never null, so an empty day is not a dead heading — it is a
- * labelled drop target with its own add button. That is what makes "put this
- * under Saturday" a click rather than a date picker.
- */
 function DaySection({
   day,
   today,
@@ -477,9 +433,6 @@ function DaySection({
   const open: Todo[] = groups.dated[day] || [];
   const done: Todo[] = groups.done[day] || [];
 
-  // In period views (week/month) done items appear inline with strikethrough
-  // rather than in a separate collapsible "Done" section — the day is already
-  // a small unit and a second header inside it adds hierarchy without meaning.
   return (
     <TodoGroup
       groupKey={day}
