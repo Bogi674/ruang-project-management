@@ -4,6 +4,7 @@ import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useSpaces } from '@/lib/spaces';
+import { flattenSpaces, SpaceAssignMenu } from '@/components/spaces/SpaceAssignMenu';
 import { formatFileSize, formatRelativeTime } from '@/lib/utils';
 import { formatDueLabel, formatEstimate, formatTime, isParentLocked, todayISO } from '@/lib/todos';
 import type { SubtaskMode, Todo } from '@/types';
@@ -262,25 +263,28 @@ function PanelBody({ todo }: { todo: Todo }) {
             <span className="w-3.5 flex justify-center flex-shrink-0">
               <span
                 className="w-2 h-2 rounded-full"
-                style={{ background: todo.space?.color || 'var(--border-medium)' }}
+                style={{
+                  background:
+                    flattenSpaces(spaces).find((s) => s.id === todo.space_id)?.color ||
+                    'var(--border-medium)',
+                }}
               />
             </span>
-            <label htmlFor="todo-space" className="flex-1 text-12.5 text-text-secondary">
-              Space
-            </label>
-            <select
-              id="todo-space"
-              value={todo.space_id ?? ''}
-              onChange={(e) => updateTodo(todo.id, { space_id: e.target.value || null })}
-              className="bg-transparent text-12.5 text-text-primary font-medium outline-none text-right"
+            <span className="flex-1 text-12.5 text-text-secondary">Space</span>
+            <SpaceAssignMenu
+              currentSpaceId={todo.space_id}
+              onSelect={(spaceId) => updateTodo(todo.id, { space_id: spaceId })}
             >
-              <option value="">None</option>
-              {spaces.map((space) => (
-                <option key={space.id} value={space.id}>
-                  {space.name}
-                </option>
-              ))}
-            </select>
+              {({ onClick }) => (
+                <button
+                  type="button"
+                  onClick={onClick}
+                  className="text-12.5 font-medium text-text-primary hover:text-accent-blue-dark transition-colors duration-120"
+                >
+                  {flattenSpaces(spaces).find((s) => s.id === todo.space_id)?.name ?? 'None'}
+                </button>
+              )}
+            </SpaceAssignMenu>
           </div>
         </div>
 

@@ -106,7 +106,7 @@ function AllView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement> 
 /* ── Today ────────────────────────────────────────────────────────────────*/
 
 function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement> }) {
-  const { groups, prefs } = useTodos();
+  const { groups } = useTodos();
   const today = todayISO();
   const [showDone, setShowDone] = useState(true);
 
@@ -133,7 +133,7 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
           tone="today"
           todos={open}
           done={[]}
-          cap={prefs.todayCap}
+          cap={null}
           addRow={null}
         />
       ) : overdue.length === 0 ? (
