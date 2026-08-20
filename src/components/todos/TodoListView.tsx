@@ -49,10 +49,7 @@ function AllView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement> 
 
       <div className="md:basis-[60%] md:min-w-0 flex-1 flex flex-col">
         {/* Sticky quick-add */}
-        <div
-          className="sticky top-0 z-10 px-8 pt-[26px] pb-4"
-          style={{ background: 'var(--canvas-base, var(--bg-base))' }}
-        >
+        <div className="sticky top-0 z-10 px-8 pt-[26px] pb-4">
           <div ref={composeRef}>
             <QuickAdd
               placeholder="Add a to-do — type a date, or leave it for Anytime"
@@ -109,10 +106,7 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
   return (
     <div className="w-full max-w-[920px] mx-auto flex flex-col">
       {/* Sticky header: date headline + progress + quick-add */}
-      <div
-        className="sticky top-0 z-10 px-4 md:px-8 pt-[26px] pb-4"
-        style={{ background: 'var(--canvas-base, var(--bg-base))' }}
-      >
+      <div className="sticky top-0 z-10 px-4 md:px-8 pt-[26px] pb-4">
         <TodayHeader open={[...overdue, ...open]} done={done} />
         <div ref={composeRef}>
           <QuickAdd showShortcut />

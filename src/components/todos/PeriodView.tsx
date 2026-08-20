@@ -186,7 +186,6 @@ export function PeriodView({
       <div
         ref={stickyBarRef}
         className="sticky top-0 z-10 px-8 pt-[26px] pb-4"
-        style={{ background: 'var(--canvas-base, var(--bg-base))' }}
       >
         <header className="flex items-baseline gap-3 flex-wrap mb-3">
           <h2
