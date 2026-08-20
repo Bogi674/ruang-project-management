@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useSpaces } from '@/lib/spaces';
@@ -38,7 +38,21 @@ type OpenPopover = 'deadline' | 'reminder' | 'repeat' | 'attach' | null;
  */
 export function TodoDetailPanel() {
   const { todos, openTodoId, setOpenTodoId } = useTodos();
-  const todo = todos.find((t) => t.id === openTodoId) || null;
+
+  /*
+   * Build the full todo (with subtasks) from the flat todos array.
+   *
+   * The flat array stores parents and sub-tasks interleaved; `subtasks` is only
+   * populated on the hierarchical `groups` structure. The detail panel reads the
+   * flat array so it stays current after optimistic mutations without waiting for
+   * the groups memo to re-run. Subtasks are filtered here instead.
+   */
+  const todo = useMemo(() => {
+    const parent = todos.find((t) => t.id === openTodoId);
+    if (!parent) return null;
+    const subtasks = todos.filter((t) => t.parent_id === openTodoId);
+    return { ...parent, subtasks };
+  }, [todos, openTodoId]);
 
   useEffect(() => {
     if (!todo) return;
@@ -65,7 +79,12 @@ export function TodoDetailPanel() {
         aria-modal="true"
         className="relative w-full md:w-[440px] h-full md:h-auto md:max-h-[calc(100vh-32px)] md:m-4 bg-bg-base md:border md:border-border-medium md:rounded-[14px] shadow-modal overflow-y-auto overscroll-none animate-modalIn flex flex-col"
       >
-        <PanelBody todo={todo} />
+        {/*
+          key={todo.id} remounts PanelBody whenever the user switches between
+          todos, so uncontrolled inputs (title, description, estimate) reset to
+          the new todo's values rather than keeping stale ones.
+        */}
+        <PanelBody key={todo.id} todo={todo} />
       </div>
     </div>,
     document.body
@@ -79,6 +98,7 @@ function PanelBody({ todo }: { todo: Todo }) {
   const [subtaskDraft, setSubtaskDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const dateRef = useRef<HTMLButtonElement>(null);
   const timeRef = useRef<HTMLButtonElement>(null);
   const reminderRef = useRef<HTMLButtonElement>(null);
@@ -90,11 +110,19 @@ function PanelBody({ todo }: { todo: Todo }) {
   const subtasks = todo.subtasks || [];
   const doneCount = subtasks.filter((s) => s.is_completed).length;
 
+  // Auto-size the title textarea on mount so long titles expand immediately.
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
   async function addSubtask() {
     const title = subtaskDraft.trim();
     if (!title) return;
-    await createTodo({ title, parent_id: todo.id });
     setSubtaskDraft('');
+    await createTodo({ title, parent_id: todo.id });
   }
 
   return (
@@ -160,19 +188,21 @@ function PanelBody({ todo }: { todo: Todo }) {
           {/*
             A textarea rather than an input: to-do titles wrap to two and three
             lines often enough that a single-line field that scrolls sideways
-            would hide the end of most of them.
+            would hide the end of most of them. defaultValue + key={todo.id}
+            means this remounts (and resets) when the panel switches to a
+            different to-do; the auto-size effect then runs again.
           */}
           <textarea
+            ref={titleRef}
             defaultValue={todo.title}
             onBlur={(e) => {
               const next = e.target.value.trim();
               if (next && next !== todo.title) updateTodo(todo.id, { title: next });
               else e.target.value = todo.title;
             }}
-            rows={1}
             aria-label="Title"
-            className="flex-1 min-w-0 resize-none bg-transparent border-none outline-none text-[17px] leading-[1.35] text-[color:var(--heading-color)] field-sizing-content"
-            style={{ fontWeight: 580, letterSpacing: '-0.01em', height: 'auto' }}
+            className="flex-1 min-w-0 resize-none bg-transparent border-none outline-none text-[17px] leading-[1.35] text-[color:var(--heading-color)]"
+            style={{ fontWeight: 580, letterSpacing: '-0.01em', height: 'auto', overflow: 'hidden' }}
             onInput={(e) => {
               const el = e.currentTarget;
               el.style.height = 'auto';
@@ -268,32 +298,17 @@ function PanelBody({ todo }: { todo: Todo }) {
           </div>
 
           {subtasks.map((subtask) => (
-            <div key={subtask.id} className="flex items-center gap-2.5">
-              <TodoCheckbox
-                checked={subtask.is_completed}
-                onChange={() => toggleComplete(subtask.id)}
-                label={subtask.is_completed ? `Reopen ${subtask.title}` : `Mark ${subtask.title} done`}
-                size={17}
-                radius={5}
-              />
-              <span
-                className={`text-13 ${
-                  subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
-                }`}
-              >
-                {subtask.title}
-              </span>
-              <button
-                type="button"
-                onClick={() => deleteTodo(subtask.id)}
-                aria-label={`Delete ${subtask.title}`}
-                className="ml-auto text-text-faint hover:text-danger transition-colors duration-120"
-              >
-                <CloseIcon size={12} />
-              </button>
-            </div>
+            <SubtaskPanelRow
+              key={subtask.id}
+              subtask={subtask}
+              onToggle={() => toggleComplete(subtask.id)}
+              onDelete={() => deleteTodo(subtask.id)}
+              onRename={(title) => updateTodo(subtask.id, { title })}
+              onOpenDetail={() => setOpenTodoId(subtask.id)}
+            />
           ))}
 
+          {/* Add sub-task input */}
           <input
             value={subtaskDraft}
             onChange={(e) => setSubtaskDraft(e.target.value)}
@@ -302,8 +317,10 @@ function PanelBody({ todo }: { todo: Todo }) {
                 e.preventDefault();
                 addSubtask();
               }
+              if (e.key === 'Escape') {
+                setSubtaskDraft('');
+              }
             }}
-            onBlur={addSubtask}
             placeholder="+ sub-task"
             aria-label="Add a sub-task"
             className="bg-transparent border-none outline-none text-12.5 text-text-primary placeholder:text-text-faint pl-[27px]"
@@ -413,6 +430,93 @@ function PanelBody({ todo }: { todo: Todo }) {
         <AttachPopover anchorRef={attachRef} onClose={() => setPopover(null)} todo={todo} />
       )}
     </>
+  );
+}
+
+/**
+ * A single sub-task row inside the detail panel.
+ *
+ * Editable title (inline input on click), delete button, and an "Open" button
+ * to navigate into the sub-task's own detail panel where its deadline can be set.
+ */
+function SubtaskPanelRow({
+  subtask,
+  onToggle,
+  onDelete,
+  onRename,
+  onOpenDetail,
+}: {
+  subtask: Todo;
+  onToggle: () => unknown;
+  onDelete: () => unknown;
+  onRename: (title: string) => unknown;
+  onOpenDetail: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function commitEdit(value: string) {
+    const next = value.trim();
+    if (next && next !== subtask.title) onRename(next);
+    setEditing(false);
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 group/subtask">
+      <TodoCheckbox
+        checked={subtask.is_completed}
+        onChange={onToggle}
+        label={subtask.is_completed ? `Reopen ${subtask.title}` : `Mark ${subtask.title} done`}
+        size={17}
+        radius={5}
+      />
+
+      {editing ? (
+        <input
+          ref={inputRef}
+          defaultValue={subtask.title}
+          autoFocus
+          onBlur={(e) => commitEdit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitEdit(e.currentTarget.value); }
+            if (e.key === 'Escape') { setEditing(false); }
+          }}
+          className="flex-1 min-w-0 bg-transparent border-none outline-none text-13 text-text-primary"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Click to edit"
+          className={`flex-1 min-w-0 text-left text-13 ${
+            subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
+          } hover:text-accent-blue-dark transition-colors duration-120`}
+        >
+          {subtask.title}
+        </button>
+      )}
+
+      {/* Open detail to set deadline etc. */}
+      <button
+        type="button"
+        onClick={onOpenDetail}
+        aria-label={`Open ${subtask.title} details`}
+        title="Open details (set deadline, etc.)"
+        className="opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-120 text-text-faint hover:text-text-secondary flex-shrink-0"
+      >
+        <CalendarIcon size={12} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${subtask.title}`}
+        title="Delete sub-task"
+        className="opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-120 text-text-faint hover:text-danger flex-shrink-0"
+      >
+        <CloseIcon size={12} />
+      </button>
+    </div>
   );
 }
 
