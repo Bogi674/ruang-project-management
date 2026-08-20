@@ -361,6 +361,33 @@ export function TodoProvider({
 
   const createTodo = useCallback(
     async (input: Partial<Todo> & { title: string }): Promise<Todo | null> => {
+      // Optimistic: show the row instantly, then swap in the real one from the server.
+      const tempId = `__tmp__${Date.now()}`;
+      const optimistic: Todo = {
+        id: tempId,
+        user_id: '',
+        parent_id: input.parent_id ?? null,
+        space_id: input.space_id ?? null,
+        title: input.title,
+        description: input.description ?? null,
+        due_date: input.due_date ?? null,
+        due_time: input.due_time ?? null,
+        estimate_minutes: input.estimate_minutes ?? null,
+        position: input.position ?? 0,
+        is_completed: false,
+        completed_at: null,
+        subtask_mode: input.subtask_mode ?? 'independent',
+        recurrence: input.recurrence ?? null,
+        recurrence_parent_id: input.recurrence_parent_id ?? null,
+        reminder: input.reminder ?? null,
+        source_note_id: input.source_note_id ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        subtasks: [],
+        attachments: [],
+      };
+      setTodos((current) => [...current, optimistic]);
+
       try {
         const res = await fetch('/api/todos', {
           method: 'POST',
@@ -369,17 +396,19 @@ export function TodoProvider({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
+          setTodos((current) => current.filter((t) => t.id !== tempId));
           setError(body?.error || 'Could not add that to-do');
           return null;
         }
         const created = (await res.json()) as Todo;
-        setTodos((current) => [...current, created]);
+        setTodos((current) => current.map((t) => (t.id === tempId ? created : t)));
         setCounts((c) => ({ ...c, total: c.total + 1 }));
         setError(null);
         announce(`Added ${created.title}`);
         scheduleResync();
         return created;
       } catch {
+        setTodos((current) => current.filter((t) => t.id !== tempId));
         setError('Could not reach the server — that to-do was not saved');
         return null;
       }
