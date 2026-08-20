@@ -114,7 +114,7 @@ function TodayView({ composeRef }: { composeRef?: React.RefObject<HTMLDivElement
         style={{ background: 'color-mix(in srgb, var(--canvas-base, var(--bg-base)) 80%, transparent)' }}
       >
         <TodayHeader open={[...overdue, ...open]} done={done} />
-        <div ref={composeRef}>
+        <div ref={composeRef} className="mt-4">
           <QuickAdd showShortcut />
         </div>
       </div>

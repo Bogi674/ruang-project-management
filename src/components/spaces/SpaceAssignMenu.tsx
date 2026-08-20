@@ -95,7 +95,7 @@ export function SpaceAssignMenu({ currentSpaceId, onSelect, children }: SpaceAss
       {open && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          className="fixed w-[200px] max-h-[280px] overflow-y-auto bg-bg-base border border-border-default rounded-[10px] py-1.5 z-[100]"
+          className="fixed w-[200px] max-h-[280px] overflow-y-auto bg-bg-base border border-border-default rounded-[10px] py-1.5 z-[160]"
           style={{ top: coords.top, left: coords.left, boxShadow: 'var(--shadow-modal)' }}
           onClick={(e) => e.stopPropagation()}
         >
