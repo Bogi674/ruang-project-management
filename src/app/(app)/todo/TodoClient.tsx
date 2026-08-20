@@ -167,7 +167,7 @@ function TodoScreen() {
       <div
         ref={scrollRef}
         data-app-scroll=""
-        className="flex-1 min-h-0 overflow-y-auto overscroll-none bg-bg-base"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-none"
       >
         <div className="px-8 pt-5 empty:hidden">
           <MigrationCard />

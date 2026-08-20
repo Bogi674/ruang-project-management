@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { TodoSettingsTab } from '@/components/todos/TodoSettingsTab';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -491,6 +491,8 @@ function SaveErrorNote({ error, field }: { error: PreferenceSaveError | null; fi
   );
 }
 
+const PRESET_VALUES = new Set(ACCENT_PRESETS.map((p) => p.value));
+
 function AppearanceTab({
   preferences,
   updatePreferences,
@@ -500,6 +502,29 @@ function AppearanceTab({
   updatePreferences: ReturnType<typeof usePreferences>['updatePreferences'];
   saveError: PreferenceSaveError | null;
 }) {
+  const colorInputRef = useRef<HTMLInputElement>(null);
+
+  // The last hex the picker committed — so the picker retains its value when
+  // re-opened even if the user later pressed "None".
+  const isCustomActive =
+    preferences.accent_color !== null &&
+    preferences.accent_color !== undefined &&
+    !PRESET_VALUES.has(preferences.accent_color ?? '');
+  const [customHex, setCustomHex] = useState<string>(
+    isCustomActive ? (preferences.accent_color ?? '#A1B5D8') : '#A1B5D8'
+  );
+
+  const applyCustom = useCallback(
+    (hex: string) => {
+      const clean = hex.trim().toLowerCase();
+      if (/^#[0-9a-f]{6}$/.test(clean)) {
+        setCustomHex(clean);
+        updatePreferences({ accent_color: clean });
+      }
+    },
+    [updatePreferences]
+  );
+
   return (
     <div className="space-y-8">
       {/* Theme */}
@@ -631,6 +656,65 @@ function AppearanceTab({
               </button>
             );
           })}
+
+          {/* Custom colour — shows the picker swatch; active when a non-preset hex is stored. */}
+          <div className="relative">
+            <button
+              title="Custom colour"
+              onClick={() => colorInputRef.current?.click()}
+              className="w-9 h-9 rounded-full transition-all duration-120 flex items-center justify-center overflow-hidden border border-border-medium"
+              style={{
+                background: isCustomActive ? customHex : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                outline: isCustomActive ? `2.5px solid ${customHex}` : '2.5px solid transparent',
+                outlineOffset: '2px',
+                boxShadow: isCustomActive ? `0 0 0 1px rgba(0,0,0,0.08)` : undefined,
+              }}
+            >
+              {isCustomActive && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m20 6-11 11-5-5"/>
+                </svg>
+              )}
+            </button>
+            <input
+              ref={colorInputRef}
+              type="color"
+              value={customHex}
+              onChange={(e) => {
+                setCustomHex(e.target.value);
+                updatePreferences({ accent_color: e.target.value });
+              }}
+              className="absolute opacity-0 w-0 h-0 pointer-events-none"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+          </div>
+
+          {/* Hex field — only shown when custom is active */}
+          {isCustomActive && (
+            <input
+              type="text"
+              value={customHex}
+              onChange={(e) => setCustomHex(e.target.value)}
+              onBlur={(e) => applyCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') applyCustom(e.currentTarget.value); }}
+              maxLength={7}
+              spellCheck={false}
+              aria-label="Custom accent hex colour"
+              className="w-[90px] h-9 px-3 rounded-full border border-border-medium text-12.5 font-mono text-text-primary bg-bg-surface outline-none focus:border-accent-blue transition-colors duration-120"
+            />
+          )}
+
+          {/* None — clears the override so the scheme's accent is used. */}
+          {preferences.accent_color !== null && preferences.accent_color !== undefined && (
+            <button
+              title="Use scheme default"
+              onClick={() => updatePreferences({ accent_color: null })}
+              className="h-9 px-3 rounded-full border border-border-medium text-12.5 text-text-muted hover:text-text-secondary hover:bg-bg-surface transition-colors duration-120"
+            >
+              None
+            </button>
+          )}
         </div>
         <SaveErrorNote error={saveError} field="accent_color" />
       </section>
