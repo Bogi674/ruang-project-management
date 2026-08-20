@@ -29,57 +29,58 @@ export function TodayHeader({ open, done }: { open: Todo[]; done: Todo[] }) {
   const percent = total ? Math.round((done.length / total) * 100) : 0;
 
   return (
-    <header className="flex items-end gap-5 flex-wrap">
-      <div className="flex flex-col gap-[5px]">
-        <h1
-          className="m-0 font-serif text-[26px] font-normal text-[color:var(--heading-color)]"
-          style={{ letterSpacing: '-0.015em' }}
-        >
-          {formatDayHeading(today)}
-        </h1>
-        <p className="m-0 text-12.5 text-text-muted">
+    <header className="flex flex-col gap-2">
+      <h1
+        className="m-0 font-serif text-[26px] font-normal text-[color:var(--heading-color)]"
+        style={{ letterSpacing: '-0.015em' }}
+      >
+        {formatDayHeading(today)}
+      </h1>
+
+      <div className="flex items-center gap-3 min-w-0">
+        <p className="m-0 text-11.5 text-text-muted flex-shrink-0">
           {open.length} to go
           {done.length > 0 && ` · ${done.length} done`}
           {prefs.showEstimates && totalMinutes > 0 && (
             <> · roughly {formatEstimate(totalMinutes, true)} of work</>
           )}
         </p>
-      </div>
 
-      {prefs.showProgress && total > 0 && (
-        <div className="ml-auto flex items-center gap-4">
-          <div className="flex flex-col gap-1.5 w-[200px]">
-            <div
-              className="h-1.5 rounded-full bg-bg-elevated overflow-hidden"
-              role="progressbar"
-              aria-valuenow={done.length}
-              aria-valuemin={0}
-              aria-valuemax={total}
-              aria-label="To-dos done today"
-            >
+        {prefs.showProgress && total > 0 && (
+          <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+            <div className="flex flex-col gap-1 w-[110px] md:w-[200px]">
               <div
-                className="h-full rounded-full bg-accent-blue transition-all duration-220"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-            <span className="font-mono text-[9.5px] tracking-[0.06em] text-text-muted">
-              {done.length} / {total} DONE TODAY
-            </span>
-          </div>
-
-          {streak > 1 && (
-            <div
-              className="flex items-center gap-[7px] bg-accent-amber-bg rounded-full px-3 py-1.5"
-              style={{ border: '1px solid var(--accent-amber-border)' }}
-            >
-              <StarIcon size={13} className="text-accent-amber" />
-              <span className="text-11.5 text-accent-amber-dark" style={{ fontWeight: 580 }}>
-                {streak}-day streak
+                className="h-1.5 rounded-full bg-bg-elevated overflow-hidden"
+                role="progressbar"
+                aria-valuenow={done.length}
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-label="To-dos done today"
+              >
+                <div
+                  className="h-full rounded-full bg-accent-blue transition-all duration-220"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <span className="font-mono text-[9px] tracking-[0.06em] text-text-muted text-right">
+                {done.length} / {total} DONE TODAY
               </span>
             </div>
-          )}
-        </div>
-      )}
+
+            {streak > 1 && (
+              <div
+                className="flex items-center gap-[7px] bg-accent-amber-bg rounded-full px-3 py-1.5"
+                style={{ border: '1px solid var(--accent-amber-border)' }}
+              >
+                <StarIcon size={13} className="text-accent-amber" />
+                <span className="text-11.5 text-accent-amber-dark" style={{ fontWeight: 580 }}>
+                  {streak}-day streak
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }
