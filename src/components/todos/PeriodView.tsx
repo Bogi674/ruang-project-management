@@ -185,7 +185,8 @@ export function PeriodView({
       {/* ── Sticky header: scrollspy title + quick-add ─────────────────── */}
       <div
         ref={stickyBarRef}
-        className="sticky top-0 z-10 px-8 pt-[26px] pb-4"
+        className="sticky top-0 z-10 px-8 pt-[26px] pb-4 backdrop-blur-md border-b border-border-light"
+        style={{ background: 'color-mix(in srgb, var(--canvas-base, var(--bg-base)) 80%, transparent)' }}
       >
         <header className="flex items-baseline gap-3 flex-wrap mb-3">
           <h2
