@@ -14,7 +14,7 @@ import {
   SubtaskProgress,
   TimeChip,
 } from './TodoChips';
-import { ArrowRightIcon, GripIcon, OverflowIcon, PlusIcon } from './icons';
+import { ArrowRightIcon, CloseIcon, GripIcon, OverflowIcon, PlusIcon } from './icons';
 import { useTodoActions } from './TodoProvider';
 import { useTodoDragActions } from './TodoDragContext';
 import { TodoRowMenu } from './TodoRowMenu';
@@ -279,12 +279,12 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
 
 export const TodoRow = memo(TodoRowInner);
 
-/** A sub-task: same row, one size down, no chips of its own beyond an estimate. */
+/** A sub-task: same row, one size down. Delete and open-detail on hover. */
 function SubtaskRow({ subtask }: { subtask: Todo }) {
-  const { toggleComplete, prefs } = useTodoActions();
+  const { toggleComplete, deleteTodo, setOpenTodoId, prefs } = useTodoActions();
 
   return (
-    <div className="flex items-center gap-[11px]">
+    <div className="flex items-center gap-[11px] group/sub">
       <TodoCheckbox
         checked={subtask.is_completed}
         onChange={() => toggleComplete(subtask.id)}
@@ -294,18 +294,30 @@ function SubtaskRow({ subtask }: { subtask: Todo }) {
         size={16}
         radius={4}
       />
-      <span
-        className={`text-12.5 ${
+      <button
+        type="button"
+        onClick={() => setOpenTodoId(subtask.id)}
+        title="Open to set deadline, reminder, etc."
+        className={`flex-1 min-w-0 text-left text-12.5 hover:underline decoration-border-medium underline-offset-2 ${
           subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
         }`}
       >
         {subtask.title}
-      </span>
+      </button>
       {prefs.showEstimates && subtask.estimate_minutes && !subtask.is_completed && (
         <span className="font-mono text-[9.5px] text-text-faint border border-border-default rounded px-[5px] py-px">
           {subtask.estimate_minutes}m
         </span>
       )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); deleteTodo(subtask.id); }}
+        aria-label={`Delete ${subtask.title}`}
+        title="Delete sub-task"
+        className="opacity-0 group-hover/sub:opacity-100 transition-opacity duration-120 text-text-faint hover:text-danger flex-shrink-0"
+      >
+        <CloseIcon size={11} />
+      </button>
     </div>
   );
 }

@@ -614,6 +614,23 @@ export function TodoProvider({
   const attach = useCallback(
     async (todoId: string, body: Record<string, unknown>): Promise<TodoAttachment | null> => {
       try {
+        /*
+         * The file upload route (POST /api/todos/[id]/upload) creates both the
+         * file row and the attachment in one request and returns the attachment.
+         * The popover passes the result back here via `_already_created` so the
+         * provider can update local state without making a second API call.
+         */
+        if (body._already_created) {
+          const created = body._already_created as TodoAttachment;
+          setTodos((current) =>
+            current.map((t) =>
+              t.id === todoId ? { ...t, attachments: [...(t.attachments || []), created] } : t
+            )
+          );
+          setError(null);
+          return created;
+        }
+
         const res = await fetch(`/api/todos/${todoId}/attachments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
