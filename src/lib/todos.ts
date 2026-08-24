@@ -315,7 +315,7 @@ export const TODO_DEFAULTS: ResolvedTodoPreferences = {
   showEstimates: true,
   showProgress: true,
   todayCap: 6,
-  rollover: true,
+  rollover: false,
 };
 
 /**
