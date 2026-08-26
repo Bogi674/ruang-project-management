@@ -80,51 +80,30 @@ export function AttachPopover({
     setUploadState({ phase: 'uploading', filename: file.name, progress: 0 });
 
     try {
-      // 1. Get a presigned PUT URL scoped to this todo.
-      const urlRes = await fetch(
-        `/api/todos/${todo.id}/upload?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type || 'application/octet-stream')}`
-      );
-      if (!urlRes.ok) {
-        const err = await urlRes.json().catch(() => null);
-        throw new Error(err?.error || 'Could not get upload URL');
-      }
-      const { url: presignedUrl, key } = (await urlRes.json()) as { url: string; key: string };
+      /*
+       * Single server-side upload: the file travels to our Next.js route, which
+       * puts it to R2 directly. This avoids requiring R2 CORS rules for
+       * browser-side PUT, which was the root cause of the "Failed to fetch" error
+       * users saw when the bucket had no CORS policy configured.
+       */
+      const form = new FormData();
+      form.append('file', file, file.name);
 
-      setUploadState({ phase: 'uploading', filename: file.name, progress: 30 });
+      setUploadState({ phase: 'uploading', filename: file.name, progress: 40 });
 
-      // 2. Upload directly to R2.
-      const putRes = await fetch(presignedUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
-      if (!putRes.ok) throw new Error('Upload to storage failed');
-
-      setUploadState({ phase: 'uploading', filename: file.name, progress: 80 });
-
-      // 3. Save metadata + create attachment in one request.
       const saveRes = await fetch(`/api/todos/${todo.id}/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          r2_object_key: key,
-          filename: file.name,
-          mime_type: file.type || 'application/octet-stream',
-          size_bytes: file.size,
-        }),
+        body: form,
+        // Do NOT set Content-Type — the browser sets it with the correct boundary.
       });
       if (!saveRes.ok) {
         const err = await saveRes.json().catch(() => null);
-        throw new Error(err?.error || 'Could not save file');
+        throw new Error(err?.error || 'Upload failed');
       }
 
-      // The response is the new attachment; the parent's state is updated via
-      // the `attach` call returning the row, but here we receive it directly.
+      setUploadState({ phase: 'uploading', filename: file.name, progress: 90 });
+
       const attachment = (await saveRes.json()) as TodoAttachment;
-      // Manually optimistic-merge by calling the stub attach logic — but since
-      // the attachment is already created server-side, we just close and refresh.
-      // The detail panel will re-derive attachments from the todos array via the
-      // provider's `attach` path.
       await attach(todo.id, { _already_created: attachment });
       setUploadState({ phase: 'idle' });
       onClose();

@@ -90,15 +90,44 @@ export const authOptions: NextAuthOptions = {
         if (existing) {
           user.id = existing.id;
         } else {
-          // Creates the Supabase auth user. The handle_new_user trigger
-          // fires automatically and inserts the public.users row.
-          const { data: authUser, error } = await db.auth.admin.createUser({
-            email: user.email!,
-            email_confirm: true,
-            user_metadata: { name: user.name, avatar_url: user.image },
-          });
-          if (error || !authUser.user) return false;
-          user.id = authUser.user.id;
+          /*
+           * User is absent from public.users. Before trying to create a new
+           * auth user, check auth.users directly: a partial earlier signup
+           * (trigger failure, network cut) leaves a row there with no matching
+           * public.users row, and createUser would fail with "already registered"
+           * causing NextAuth to return AccessDenied for a legitimate user.
+           */
+          const { data: authRow } = await db
+            .schema('auth')
+            .from('users')
+            .select('id')
+            .eq('email', user.email!)
+            .maybeSingle();
+
+          if (authRow) {
+            // Auth user exists but public.users row is missing — the trigger
+            // must have failed. Create the profile row manually and proceed.
+            user.id = authRow.id;
+            await db.from('users').upsert(
+              {
+                id: authRow.id,
+                email: user.email!,
+                name: user.name || user.email!.split('@')[0],
+                avatar_url: user.image || null,
+              },
+              { onConflict: 'id', ignoreDuplicates: true }
+            );
+          } else {
+            // Creates the Supabase auth user. The handle_new_user trigger
+            // fires automatically and inserts the public.users row.
+            const { data: authUser, error } = await db.auth.admin.createUser({
+              email: user.email!,
+              email_confirm: true,
+              user_metadata: { name: user.name, avatar_url: user.image },
+            });
+            if (error || !authUser.user) return false;
+            user.id = authUser.user.id;
+          }
         }
       }
       return true;

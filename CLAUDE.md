@@ -1,4 +1,4 @@
-# Ruang v1.0 — Claude Code Context File
+# Ruang v1.7 — Claude Code Context File
 
 > Read this at the start of every session. This is the source of truth for architecture,
 > design decisions, and critical rules. Visual source of truth: `Ruang_Prototype_dc.html`
@@ -110,6 +110,22 @@ The largest single feature addition. A `todos` row, not a note.
 - Checklist-note migration: `POST /api/todos/migrate`; note preserved; `source_note_id` makes it re-runnable
 - One calendar at `/calendar`; `/todo` Calendar control is a link, not a toggle; `CalendarScreen` wraps `TodoProvider` + `TodoDragProvider`
 - Rollover defaulted to **off** (overdue items stay where they are)
+
+### v1.7 — Bug Fix Patch *(Aug 26, 2026)*
+
+Auth hardening, forgot-password flow, file upload fix, sub-task persistence fix, Settings About tab.
+
+- **Auth:** email/password signup no longer returns "Registration failed" for duplicate `auth.users` entries — edge case handled silently
+- **Google OAuth:** `signIn` callback now queries `auth.users` schema directly before `createUser`; partial-signup accounts (auth row present, `public.users` row missing) no longer show AccessDenied
+- **Forgot password — full HMAC-OTP flow:**
+  - `POST /api/auth/forgot-password` — rate-limited 3/15 min/IP; generates TOTP-style 6-char code via `lib/otp.ts`; sends via Resend; always returns `{ ok: true }` (anti-enumeration)
+  - `POST /api/auth/verify-otp` — rate-limited 3 attempts/30 s per email+IP; accepts current + previous 10-min window (~20 min total validity); issues signed reset token on success
+  - `POST /api/auth/reset-password` — verifies HMAC + 30-min expiry; updates password via `auth.admin.updateUserById`
+  - Login page: 4-step UI (email → OTP input with 30 s cooldown → new password → done)
+  - `lib/otp.ts` — OTP utilities extracted from route file (Next.js route export rule: only HTTP handlers may be exported)
+- **Todo file attachment "Failed to fetch":** browser-side presigned PUT blocked by R2 CORS; replaced with server-side FormData proxy via `putToR2()` in `lib/r2.ts`; `AttachPopover.tsx` now POSTs `multipart/form-data` directly; `api/todos/[id]/upload/route.ts` handles both multipart and legacy JSON paths
+- **Sub-task disappearance:** completed parent rows now always render their sub-task list; `SubtaskRow` shows its own due date when different from the parent's; overdue open sub-tasks display a red "Overdue" notice
+- **Settings → About tab:** version badge, version history table, stack credits
 
 ---
 

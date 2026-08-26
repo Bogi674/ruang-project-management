@@ -168,6 +168,24 @@ The largest single feature addition. To-dos are a first-class entity (`todos` ro
 
 ---
 
+### v1.7 — Bug Fix Patch *(Aug 26, 2026)*
+
+No new schema migrations. Fixes to auth, file uploads, sub-task rendering, and the forgotten-password flow.
+
+**What shipped:**
+- **Email signup edge case** — `POST /api/auth/register` now silently succeeds when `auth.users` already has an entry for the address (partial-signup recovery) instead of returning "Registration failed"
+- **Google OAuth AccessDenied** — `signIn` callback queries `auth.users` via service-role before calling `createUser`; accounts where the auth row exists but `public.users` is missing are recovered without error
+- **Forgot password — full HMAC-OTP flow:**
+  - `POST /api/auth/forgot-password` — rate-limited 3 per 15 min per IP; stateless HMAC code via `lib/otp.ts`; always returns `{ ok: true }` (anti-enumeration)
+  - `POST /api/auth/verify-otp` — 3 attempts / 30 s cooldown; accepts current + previous 10-min window (~20 min total); issues signed reset token
+  - `POST /api/auth/reset-password` — verifies HMAC + 30-min expiry; updates password via `auth.admin.updateUserById`
+  - Login page: 4-step UI (email → 6-char OTP → new password → confirmation)
+- **Todo file attachment "Failed to fetch"** — browser-side presigned PUT was blocked by R2 CORS; replaced with server-side `multipart/form-data` upload via `putToR2()` in `lib/r2.ts`; `AttachPopover` POSTs one request, no client-side R2 call
+- **Sub-task disappearance** — completed parent rows now always show their sub-tasks; `SubtaskRow` shows its own due date when different from the parent's; overdue open sub-tasks show a red "Overdue" notice
+- **Settings → About tab** — version badge (v1.7), scrollable version history, stack credits
+
+---
+
 ## What's Next (Phase 2 & 3)
 
 **Phase 2 — Polish and Power** *(not yet built)*

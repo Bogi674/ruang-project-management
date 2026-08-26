@@ -87,35 +87,53 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
   }
 
   if (todo.is_completed) {
+    const completedSubtasks = (todo.subtasks || []).filter((s) => s.is_completed).length;
+    const totalSubtasks = (todo.subtasks || []).length;
     return (
       <div
         data-drop-index={index}
         data-todo-id={todo.id}
-        className="flex items-center gap-3 bg-bg-surface border border-border-light rounded-card px-4 py-3"
+        className="flex flex-col bg-bg-surface border border-border-light rounded-card"
       >
-        {/* Keeps the checkbox in the same column as the open rows above, which
-            have a grip in front of theirs. */}
-        <span className="w-[26px] flex-shrink-0" aria-hidden="true" />
-        <TodoCheckbox
-          checked
-          tone="green"
-          onChange={() => toggleComplete(todo.id)}
-          label={`Reopen ${todo.title}`}
-        />
-        <button
-          type="button"
-          onClick={() => setOpenTodoId(todo.id)}
-          className="flex-1 min-w-0 text-left text-13 text-text-muted line-through truncate"
-        >
-          {todo.title}
-        </button>
-        {todo.completed_at && (
-          <span className="text-11 text-text-faint flex-shrink-0 tabular-nums">
-            {new Date(todo.completed_at).toLocaleTimeString('en-GB', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
+        <div className="flex items-center gap-3 px-4 py-3">
+          {/* Keeps the checkbox in the same column as the open rows above. */}
+          <span className="w-[26px] flex-shrink-0" aria-hidden="true" />
+          <TodoCheckbox
+            checked
+            tone="green"
+            onChange={() => toggleComplete(todo.id)}
+            label={`Reopen ${todo.title}`}
+          />
+          <button
+            type="button"
+            onClick={() => setOpenTodoId(todo.id)}
+            className="flex-1 min-w-0 text-left text-13 text-text-muted line-through truncate"
+          >
+            {todo.title}
+          </button>
+          {totalSubtasks > 0 && (
+            <span className="text-11 text-text-faint flex-shrink-0 tabular-nums">
+              {completedSubtasks}/{totalSubtasks}
+            </span>
+          )}
+          {todo.completed_at && (
+            <span className="text-11 text-text-faint flex-shrink-0 tabular-nums">
+              {new Date(todo.completed_at).toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          )}
+        </div>
+        {totalSubtasks > 0 && (
+          <div
+            className="border-t border-border-light flex flex-col gap-[7px]"
+            style={{ padding: '8px 16px 10px 62px' }}
+          >
+            {(todo.subtasks || []).map((subtask) => (
+              <SubtaskRow key={subtask.id} subtask={subtask} parentDueDate={todo.due_date} />
+            ))}
+          </div>
         )}
       </div>
     );
@@ -236,7 +254,7 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
           style={{ padding: '10px 16px 14px 62px' }}
         >
           {(todo.subtasks || []).map((subtask) => (
-            <SubtaskRow key={subtask.id} subtask={subtask} />
+            <SubtaskRow key={subtask.id} subtask={subtask} parentDueDate={todo.due_date} />
           ))}
 
           {addingSubtask ? (
@@ -280,32 +298,56 @@ function TodoRowInner({ todo, groupKey, index, compact = false, dragged = false 
 export const TodoRow = memo(TodoRowInner);
 
 /** A sub-task: same row, one size down. Delete and open-detail on hover. */
-function SubtaskRow({ subtask }: { subtask: Todo }) {
+function SubtaskRow({ subtask, parentDueDate }: { subtask: Todo; parentDueDate?: string | null }) {
   const { toggleComplete, deleteTodo, setOpenTodoId, prefs } = useTodoActions();
+  const today = todayISO();
+
+  const subtaskOverdue =
+    !subtask.is_completed && !!subtask.due_date && subtask.due_date < today;
+  // Show the sub-task's own due date only when it differs from the parent's.
+  const showDueDate =
+    !subtask.is_completed &&
+    subtask.due_date &&
+    subtask.due_date !== parentDueDate;
 
   return (
-    <div className="flex items-center gap-[11px] group/sub">
-      <TodoCheckbox
-        checked={subtask.is_completed}
-        onChange={() => toggleComplete(subtask.id)}
-        label={
-          subtask.is_completed ? `Reopen ${subtask.title}` : `Mark ${subtask.title} done`
-        }
-        size={16}
-        radius={4}
-      />
-      <button
-        type="button"
-        onClick={() => setOpenTodoId(subtask.id)}
-        title="Open to set deadline, reminder, etc."
-        className={`flex-1 min-w-0 text-left text-12.5 hover:underline decoration-border-medium underline-offset-2 ${
-          subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
-        }`}
-      >
-        {subtask.title}
-      </button>
+    <div className="flex items-start gap-[11px] group/sub">
+      <div className="flex-shrink-0 mt-px">
+        <TodoCheckbox
+          checked={subtask.is_completed}
+          onChange={() => toggleComplete(subtask.id)}
+          label={
+            subtask.is_completed ? `Reopen ${subtask.title}` : `Mark ${subtask.title} done`
+          }
+          size={16}
+          radius={4}
+        />
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col gap-[2px]">
+        <button
+          type="button"
+          onClick={() => setOpenTodoId(subtask.id)}
+          title="Open to set deadline, reminder, etc."
+          className={`text-left text-12.5 hover:underline decoration-border-medium underline-offset-2 ${
+            subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
+          }`}
+        >
+          {subtask.title}
+        </button>
+        {(showDueDate || subtaskOverdue) && (
+          <span
+            className={`text-[10.5px] font-medium leading-none ${
+              subtaskOverdue ? 'text-danger' : 'text-text-faint'
+            }`}
+          >
+            {subtaskOverdue
+              ? `Overdue · ${subtask.due_date}`
+              : subtask.due_date}
+          </span>
+        )}
+      </div>
       {prefs.showEstimates && subtask.estimate_minutes && !subtask.is_completed && (
-        <span className="font-mono text-[9.5px] text-text-faint border border-border-default rounded px-[5px] py-px">
+        <span className="font-mono text-[9.5px] text-text-faint border border-border-default rounded px-[5px] py-px flex-shrink-0 mt-px">
           {subtask.estimate_minutes}m
         </span>
       )}
@@ -314,7 +356,7 @@ function SubtaskRow({ subtask }: { subtask: Todo }) {
         onClick={(e) => { e.stopPropagation(); deleteTodo(subtask.id); }}
         aria-label={`Delete ${subtask.title}`}
         title="Delete sub-task"
-        className="opacity-0 group-hover/sub:opacity-100 transition-opacity duration-120 text-text-faint hover:text-danger flex-shrink-0"
+        className="opacity-0 group-hover/sub:opacity-100 transition-opacity duration-120 text-text-faint hover:text-danger flex-shrink-0 mt-px"
       >
         <CloseIcon size={11} />
       </button>
