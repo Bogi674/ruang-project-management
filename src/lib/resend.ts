@@ -81,6 +81,41 @@ export async function sendVerificationEmail({
   });
 }
 
+export async function sendOtpEmail({
+  to,
+  name,
+  code,
+}: {
+  to: string;
+  name: string;
+  code: string;
+}) {
+  const html = `
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#2c3848">
+      <p style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#b8c8d6;margin:0 0 24px">Ruang</p>
+      <h1 style="font-family:Georgia,serif;font-size:22px;font-weight:400;letter-spacing:-0.02em;margin:0 0 12px">Reset your password</h1>
+      <p style="font-size:14px;line-height:1.7;color:#3a4a5c;margin:0 0 24px">
+        Hi ${esc(name)} — enter this code to reset your Ruang password.
+        It expires in 10 minutes.
+      </p>
+      <div style="background:#f4f5f7;border-radius:10px;padding:20px 28px;text-align:center;margin:0 0 24px">
+        <span style="font-family:ui-monospace,monospace;font-size:30px;font-weight:600;letter-spacing:0.18em;color:#2c3848">${esc(code)}</span>
+      </div>
+      <hr style="margin:32px 0;border:none;border-top:1px solid #e8ecf2"/>
+      <p style="font-size:11px;line-height:1.6;color:#b8c8d6;margin:0">
+        If you didn't request a password reset, ignore this message — your password won't change.
+      </p>
+    </div>
+  `;
+
+  return client().emails.send({
+    from: from(),
+    to,
+    subject: 'Your Ruang password reset code',
+    html,
+  });
+}
+
 export async function sendReminderEmail({
   to,
   reminderTitle,

@@ -84,9 +84,19 @@ export async function POST(req: NextRequest) {
       email_confirm: true,
       user_metadata: { name, avatar_url: null },
     });
-    if (error || !data.user) {
-      console.error('[register]', error?.message);
-      return NextResponse.json({ error: 'Registration failed.' }, { status: 500 });
+    if (error) {
+      // "already registered" means a partial earlier signup left the auth user
+      // without its public.users counterpart. Return success so the client
+      // tries to sign in — the handle_new_user trigger or auth.ts upsert will
+      // reconcile the missing row on the next Google sign-in; for email/password
+      // the sign-in will succeed if the password matches.
+      const alreadyExists =
+        error.message?.toLowerCase().includes('already') ||
+        error.message?.toLowerCase().includes('duplicate');
+      if (!alreadyExists) {
+        console.error('[register]', error.message);
+        return NextResponse.json({ error: 'Registration failed.' }, { status: 500 });
+      }
     }
     return NextResponse.json({ ok: true, verify: false }, { status: 201 });
   }
@@ -117,6 +127,14 @@ export async function POST(req: NextRequest) {
 
   const link = data?.properties?.action_link;
   if (error || !data?.user || !link) {
+    // If the address is already registered, return success silently — same
+    // anti-enumeration promise as the public.users check above.
+    const alreadyExists =
+      error?.message?.toLowerCase().includes('already') ||
+      error?.message?.toLowerCase().includes('duplicate');
+    if (alreadyExists) {
+      return NextResponse.json({ ok: true, verify: true }, { status: 201 });
+    }
     console.error('[register:generateLink]', error?.message);
     return NextResponse.json({ error: 'Registration failed.' }, { status: 500 });
   }

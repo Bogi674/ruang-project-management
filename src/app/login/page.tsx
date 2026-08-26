@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/layout/Logo';
 
+type ForgotStep = 'idle' | 'email' | 'otp' | 'newpass' | 'done';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -14,15 +16,32 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [justVerified, setJustVerified] = useState(false);
 
-  // Read straight from the URL rather than through useSearchParams: this page
-  // is prerendered, and that hook would drag the whole route behind a Suspense
-  // boundary for one optional flag.
+  // Forgot-password flow state.
+  const [forgotStep, setForgotStep] = useState<ForgotStep>('idle');
+  const [fpEmail, setFpEmail] = useState('');
+  const [fpCode, setFpCode] = useState('');
+  const [fpToken, setFpToken] = useState('');
+  const [fpPassword, setFpPassword] = useState('');
+  const [fpConfirm, setFpConfirm] = useState('');
+  const [fpError, setFpError] = useState('');
+  const [fpLoading, setFpLoading] = useState(false);
+  // OTP attempt tracking (mirrors server-side 30-second lockout).
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpCooldown, setOtpCooldown] = useState(0); // seconds remaining
+
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('verified') === '1') {
       setJustVerified(true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // Cooldown countdown timer.
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,18 +53,275 @@ export default function LoginPage() {
       router.push('/home');
       return;
     }
-    /*
-     * Supabase refuses an account whose address has never been confirmed, and
-     * it arrives here indistinguishable from a wrong password — the provider
-     * gives no reason back, and inventing one per case would tell an attacker
-     * which addresses are registered. One message, both possibilities named.
-     */
-    setError('Invalid email or password — or an email you haven’t confirmed yet.');
+    setError("Invalid email or password — or an email you haven't confirmed yet.");
   }
 
   async function handleGoogle() {
     await signIn('google', { callbackUrl: '/home' });
   }
+
+  // ── Forgot password handlers ────────────────────────────────────────────────
+
+  async function handleForgotSubmitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setFpError('');
+    setFpLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: fpEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFpError(data.error || 'Something went wrong.');
+        return;
+      }
+      setForgotStep('otp');
+      setOtpAttempts(0);
+      setOtpCooldown(0);
+    } catch {
+      setFpError('Could not reach the server. Please try again.');
+    } finally {
+      setFpLoading(false);
+    }
+  }
+
+  async function handleForgotSubmitOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (otpCooldown > 0) return;
+    setFpError('');
+    setFpLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: fpEmail, code: fpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const newAttempts = otpAttempts + 1;
+        setOtpAttempts(newAttempts);
+        if (newAttempts >= 3 || res.status === 429) {
+          setOtpCooldown(30);
+          setFpCode('');
+          setFpError('Too many attempts. Please wait 30 seconds before trying again.');
+        } else {
+          setFpError(data.error || 'Incorrect code.');
+        }
+        return;
+      }
+      setFpToken(data.token);
+      setForgotStep('newpass');
+    } catch {
+      setFpError('Could not reach the server. Please try again.');
+    } finally {
+      setFpLoading(false);
+    }
+  }
+
+  async function handleForgotSubmitNewPass(e: React.FormEvent) {
+    e.preventDefault();
+    setFpError('');
+    if (fpPassword !== fpConfirm) {
+      setFpError('Passwords do not match.');
+      return;
+    }
+    if (fpPassword.length < 8 || !/[a-zA-Z]/.test(fpPassword) || !/[0-9]/.test(fpPassword)) {
+      setFpError('Password must be at least 8 characters with letters and numbers.');
+      return;
+    }
+    setFpLoading(true);
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: fpToken, password: fpPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFpError(data.error || 'Could not reset password.');
+        if (res.status === 400) {
+          // Token expired — restart flow.
+          setForgotStep('email');
+          setFpCode('');
+          setFpToken('');
+        }
+        return;
+      }
+      setForgotStep('done');
+    } catch {
+      setFpError('Could not reach the server. Please try again.');
+    } finally {
+      setFpLoading(false);
+    }
+  }
+
+  function cancelForgot() {
+    setForgotStep('idle');
+    setFpEmail('');
+    setFpCode('');
+    setFpToken('');
+    setFpPassword('');
+    setFpConfirm('');
+    setFpError('');
+  }
+
+  // ── Forgot password overlay ─────────────────────────────────────────────────
+
+  if (forgotStep !== 'idle') {
+    return (
+      <div className="min-h-screen bg-bg-page flex items-center justify-center p-8">
+        <div className="w-full max-w-[364px] flex flex-col gap-7">
+          <div className="flex flex-col items-center gap-3">
+            <Logo variant="text" height={36} href="/login" />
+          </div>
+
+          {forgotStep === 'done' ? (
+            <div className="flex flex-col gap-5 text-center">
+              <h1 className="font-serif text-[22px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>
+                Password updated
+              </h1>
+              <p className="text-[13.5px] leading-[1.7] text-text-secondary">
+                Your password has been changed. Sign in with your new password.
+              </p>
+              <button
+                type="button"
+                onClick={cancelForgot}
+                className="h-12 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120"
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : forgotStep === 'email' ? (
+            <form onSubmit={handleForgotSubmitEmail} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-serif text-[22px] text-text-primary m-0" style={{ letterSpacing: '-0.02em' }}>
+                  Reset your password
+                </h1>
+                <p className="text-[13px] text-text-secondary leading-[1.6]">
+                  Enter your email and we&apos;ll send a 6-character code.
+                </p>
+              </div>
+              <input
+                type="email"
+                placeholder="Email address"
+                value={fpEmail}
+                onChange={(e) => setFpEmail(e.target.value)}
+                required
+                autoFocus
+                className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
+              />
+              {fpError && <p className="text-[12px] text-danger text-center">{fpError}</p>}
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={fpLoading}
+                  className="h-12 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120 disabled:opacity-60"
+                >
+                  {fpLoading ? 'Sending…' : 'Send code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelForgot}
+                  className="h-10 text-[13px] text-text-muted hover:text-text-secondary transition-colors duration-120"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : forgotStep === 'otp' ? (
+            <form onSubmit={handleForgotSubmitOtp} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-serif text-[22px] text-text-primary m-0" style={{ letterSpacing: '-0.02em' }}>
+                  Enter the code
+                </h1>
+                <p className="text-[13px] text-text-secondary leading-[1.6]">
+                  We sent a 6-character code to <span className="text-text-primary">{fpEmail}</span>.
+                  It expires in 10 minutes.
+                </p>
+              </div>
+              <input
+                type="text"
+                placeholder="ABC123"
+                value={fpCode}
+                onChange={(e) => setFpCode(e.target.value.toUpperCase().slice(0, 6))}
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                spellCheck={false}
+                className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted text-center font-mono tracking-widest uppercase"
+              />
+              {fpError && <p className="text-[12px] text-danger text-center">{fpError}</p>}
+              {otpCooldown > 0 && (
+                <p className="text-[12px] text-text-muted text-center">
+                  Try again in {otpCooldown}s
+                </p>
+              )}
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={fpLoading || otpCooldown > 0 || fpCode.length < 6}
+                  className="h-12 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120 disabled:opacity-60"
+                >
+                  {fpLoading ? 'Verifying…' : 'Verify code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForgotStep('email')}
+                  disabled={fpLoading}
+                  className="h-10 text-[13px] text-text-muted hover:text-text-secondary transition-colors duration-120"
+                >
+                  Resend code
+                </button>
+              </div>
+            </form>
+          ) : (
+            // forgotStep === 'newpass'
+            <form onSubmit={handleForgotSubmitNewPass} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-serif text-[22px] text-text-primary m-0" style={{ letterSpacing: '-0.02em' }}>
+                  New password
+                </h1>
+                <p className="text-[13px] text-text-secondary leading-[1.6]">
+                  Choose a password with at least 8 characters, letters and numbers.
+                </p>
+              </div>
+              <input
+                type="password"
+                placeholder="New password"
+                value={fpPassword}
+                onChange={(e) => setFpPassword(e.target.value)}
+                required
+                autoFocus
+                autoComplete="new-password"
+                className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={fpConfirm}
+                onChange={(e) => setFpConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
+              />
+              {fpError && <p className="text-[12px] text-danger text-center">{fpError}</p>}
+              <button
+                type="submit"
+                disabled={fpLoading}
+                className="h-12 rounded-[10px] bg-accent-slate text-white text-[14px] font-medium hover:bg-accent-slate-dark transition-colors duration-120 disabled:opacity-60"
+              >
+                {fpLoading ? 'Updating…' : 'Set new password'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normal login screen ─────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-bg-page flex items-center justify-center p-8">
@@ -82,7 +358,15 @@ export default function LoginPage() {
               className="h-12 px-4 rounded-[10px] border border-border-medium text-[14px] text-text-primary bg-bg-base outline-none focus:border-accent-blue transition-colors duration-120 placeholder:text-text-muted"
             />
             <div className="flex justify-end">
-              <button type="button" className="text-[12px] text-text-muted hover:text-text-secondary transition-colors duration-120">
+              <button
+                type="button"
+                onClick={() => {
+                  setFpEmail(email); // pre-fill with whatever's in the login form
+                  setFpError('');
+                  setForgotStep('email');
+                }}
+                className="text-[12px] text-text-muted hover:text-text-secondary transition-colors duration-120"
+              >
                 Forgot password?
               </button>
             </div>

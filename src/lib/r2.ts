@@ -73,3 +73,25 @@ export async function getR2SignedUrl(
 export async function deleteFromR2(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }
+
+/**
+ * Upload a file body directly to R2 from the server.
+ *
+ * Used by routes that receive files via multipart form data and need to store
+ * them without a browser-side presigned PUT (which would require R2 CORS).
+ */
+export async function putToR2(
+  key: string,
+  body: Buffer | Uint8Array | ReadableStream,
+  contentType: string,
+  contentLength?: number
+): Promise<void> {
+  const cmd = new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: body as never,
+    ContentType: contentType,
+    ...(contentLength !== undefined ? { ContentLength: contentLength } : {}),
+  });
+  await r2.send(cmd);
+}
