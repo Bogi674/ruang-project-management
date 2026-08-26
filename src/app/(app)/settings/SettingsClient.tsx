@@ -155,7 +155,7 @@ const TINT_OPTIONS = [
   { value: 'accent', label: 'Accent' },
 ];
 
-type SettingsTab = 'profile' | 'appearance' | 'to-do';
+type SettingsTab = 'profile' | 'appearance' | 'to-do' | 'about';
 
 export function SettingsClient({ name, email, image, isGoogleUser }: SettingsClientProps) {
   const router = useRouter();
@@ -170,7 +170,7 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-border-default mb-8">
-        {(['profile', 'appearance', 'to-do'] as SettingsTab[]).map((t) => (
+        {(['profile', 'appearance', 'to-do', 'about'] as SettingsTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -213,6 +213,8 @@ export function SettingsClient({ name, email, image, isGoogleUser }: SettingsCli
           saveError={saveError}
         />
       )}
+
+      {tab === 'about' && <AboutTab />}
 
       {/* Danger zone - always visible at bottom */}
       <div className="mt-10 pt-8 border-t border-border-default space-y-3">
@@ -927,6 +929,72 @@ function AppearanceTab({
           })}
         </div>
         <SaveErrorNote error={saveError} field="landing_page_preference" />
+      </section>
+    </div>
+  );
+}
+
+const VERSION_HISTORY = [
+  { version: 'v1.7', date: 'Aug 26, 2026', label: 'Bug Fix Patch', summary: 'Auth, forgot password, file uploads, sub-task persistence' },
+  { version: 'v1.6', date: 'Aug 18–24, 2026', label: 'First-class To-dos', summary: 'todos table, drag & drop, sub-tasks, focus timer, colour schemes' },
+  { version: 'v1.5', date: 'Aug 18, 2026', label: 'Schema & Shell Hardening', summary: 'search_path pinning, RPC exposure fix, shell scroll bug' },
+  { version: 'v1.4', date: 'Aug 12–14, 2026', label: 'Mobile Hardening & Theme Persistence', summary: 'Keyboard inset, WhatsApp paste fix, theme flash fix' },
+  { version: 'v1.3', date: 'Aug 10–11, 2026', label: 'Widget System, Theming & Dark Mode', summary: 'Full widget system, app backgrounds, dark mode, security hardening' },
+  { version: 'v1.2', date: 'Aug 7–8, 2026', label: 'UI Polish & Calendar', summary: 'Calendar multi-view, delete, pin, loading skeletons' },
+  { version: 'v1.1', date: 'Aug 7, 2026', label: 'Personalization & Phase 2', summary: 'Note locking, version history, export, reminder email, appearance settings' },
+  { version: 'v1.0', date: 'Aug 6–7, 2026', label: 'Core Ruang Rebuild', summary: 'Clean-slate rebuild — note-first workspace, spaces, tags, TipTap, autosave' },
+];
+
+function AboutTab() {
+  return (
+    <div className="space-y-8">
+      {/* App identity */}
+      <section className="flex flex-col items-center text-center py-6 gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo/ruang_logo.png" alt="Ruang" className="h-8 dark:hidden" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo/ruang_logo_reversed.png" alt="Ruang" className="h-8 hidden dark:block" />
+        <p className="text-[12.5px] text-text-secondary">Your personal writing space.</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint bg-bg-elevated px-2 py-0.5 rounded-md">
+            v1.7
+          </span>
+          <span className="text-[11.5px] text-text-muted">Aug 26, 2026</span>
+        </div>
+      </section>
+
+      {/* Version history */}
+      <section>
+        <p className="text-[9.5px] font-mono font-semibold uppercase tracking-[0.1em] text-text-faint mb-4">
+          Version History
+        </p>
+        <div className="space-y-2">
+          {VERSION_HISTORY.map(({ version, date, label, summary }) => (
+            <div
+              key={version}
+              className="flex gap-3 items-start py-3 border-b border-border-light last:border-0"
+            >
+              <span className="text-[11px] font-mono font-semibold text-accent-blue-dark bg-accent-blue-bg px-2 py-0.5 rounded-md shrink-0 mt-0.5">
+                {version}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-text-primary leading-snug">{label}</p>
+                <p className="text-[11.5px] text-text-muted mt-0.5 leading-relaxed">{summary}</p>
+              </div>
+              <span className="text-[11px] text-text-faint shrink-0 mt-0.5 ml-auto">{date}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Credits */}
+      <section className="text-center pt-2 pb-4">
+        <p className="text-[11.5px] text-text-muted">
+          Built with Next.js, Supabase, TipTap, and Tailwind CSS.
+        </p>
+        <p className="text-[11px] text-text-faint mt-1">
+          © 2026 Ruang. All rights reserved.
+        </p>
       </section>
     </div>
   );
