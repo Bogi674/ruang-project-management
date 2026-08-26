@@ -28,6 +28,8 @@ export default function LoginPage() {
   // OTP attempt tracking (mirrors server-side 30-second lockout).
   const [otpAttempts, setOtpAttempts] = useState(0);
   const [otpCooldown, setOtpCooldown] = useState(0); // seconds remaining
+  // Whether the done step is a "link sent" state vs "password changed".
+  const [fpDoneIsLink, setFpDoneIsLink] = useState(false);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('verified') === '1') {
@@ -75,6 +77,12 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         setFpError(data.error || 'Something went wrong.');
+        return;
+      }
+      // mode:'link' means Supabase sent a magic link — no OTP step needed.
+      if (data.mode === 'link') {
+        setFpDoneIsLink(true);
+        setForgotStep('done');
         return;
       }
       setForgotStep('otp');
@@ -180,10 +188,12 @@ export default function LoginPage() {
           {forgotStep === 'done' ? (
             <div className="flex flex-col gap-5 text-center">
               <h1 className="font-serif text-[22px] text-text-primary" style={{ letterSpacing: '-0.02em' }}>
-                Password updated
+                {fpDoneIsLink ? 'Check your email' : 'Password updated'}
               </h1>
               <p className="text-[13.5px] leading-[1.7] text-text-secondary">
-                Your password has been changed. Sign in with your new password.
+                {fpDoneIsLink
+                  ? `We sent a reset link to ${fpEmail}. Click it to choose a new password.`
+                  : 'Your password has been changed. Sign in with your new password.'}
               </p>
               <button
                 type="button"
@@ -200,7 +210,7 @@ export default function LoginPage() {
                   Reset your password
                 </h1>
                 <p className="text-[13px] text-text-secondary leading-[1.6]">
-                  Enter your email and we&apos;ll send a 6-character code.
+                  Enter your email and we&apos;ll send a reset link.
                 </p>
               </div>
               <input
