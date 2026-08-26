@@ -73,12 +73,14 @@ export async function sendVerificationEmail({
     </div>
   `;
 
-  return client().emails.send({
+  const result = await client().emails.send({
     from: from(),
     to,
     subject: 'Confirm your Ruang account',
     html,
   });
+  if (result.error) throw new Error(result.error.message);
+  return result;
 }
 
 export async function sendOtpEmail({
@@ -108,12 +110,14 @@ export async function sendOtpEmail({
     </div>
   `;
 
-  return client().emails.send({
+  const result = await client().emails.send({
     from: from(),
     to,
     subject: 'Your Ruang password reset code',
     html,
   });
+  if (result.error) throw new Error(result.error.message);
+  return result;
 }
 
 export async function sendReminderEmail({
