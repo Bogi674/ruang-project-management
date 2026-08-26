@@ -20,6 +20,99 @@ Do not reference old schema, old routes, or old component structure.
 
 ---
 
+## Version History
+
+A chronological record of every meaningful iteration from the first commit to the current state.
+For the full narrative see `README.md`; this section is the quick reference.
+
+### Legacy — Old PM Tool *(deprecated, before Aug 2026)*
+
+Four-level hierarchy: **Platform → Project → Workstream → Entry**. Traditional sidebar, project boards, structured task tracking. Deprecated in its entirety. No code from this version survives. Do not reference its schema, routes, or component names.
+
+### v1.0 — Core Ruang Rebuild *(Aug 6–7, 2026)*
+
+Clean-slate rebuild as a note-first workspace. All old PM code removed.
+
+- **Schema:** `supabase_schema.sql` — `users`, `spaces`, `notes`, `widgets`, `files`, `reminder_deliveries`, `notifications`; RLS; triggers
+- Auth: email/password + Google OAuth (NextAuth)
+- TipTap v3 editor; autosave: every keystroke → `localStorage`, debounced 1.2 s → Supabase
+- Spaces (max depth 3), My Storeroom (null `space_id`), Tags, Home, My Room, Calendar, Search
+- Widget system foundation: Reminder, File, Link — attached below note body, two-step creation
+- App shell: desktop (top navbar + resizable sidebar 176–420 px) + mobile (bottom tab bar + left drawer + FAB)
+- PWA manifest + icons; `.env.example`
+
+### v1.1 — Personalization & Phase 2 *(Aug 7, 2026)*
+
+- **Schema:** `supabase_schema_phase2.sql` — `notes.is_locked`, `note_versions` table + RLS
+- Note locking (lock/unlock toolbar button)
+- Version history panel (last 20, revertible)
+- Export: Markdown + plain text via `lib/export.ts`
+- Reminder email via Resend (`lib/resend.ts`); manual trigger `POST /api/reminders/send`
+- Appearance settings: accent color (6 presets), typography, theme (light/dark opt-in), density, landing page
+- Logo redesign: Y-mark + wordmark PNGs (ink + reversed), organized in `public/logo/`
+- Hardened RLS; fixed Google OAuth duplicate insert bug
+
+### v1.2 — UI Polish & Calendar *(Aug 7–8, 2026)*
+
+- Delete notes/spaces; pin spaces to sidebar; space note counts
+- Calendar multi-view (month/week); loading skeletons; file audit
+- Fixed duplicate notes, date formatting, favicon, Google auth detection
+- Full logo lockup in navbar; logo PNG files under `public/logo/`
+- Fixed widget duplication; calendar redesigned with unscheduled tray
+- **React Strict Mode fix:** all note/widget creation in click handlers (`FAB.tsx`), never `useEffect`
+- Editor toolbar overhaul; dedicated space pages; note drag-to-space (`lib/dnd.ts`)
+- Autosave hardening: retry loop, `flushNote()` on `beforeunload` + `visibilitychange`
+- PWA/mobile fixes: tab bar safe-area, calendar layout, editor toolbar; half-dark theme fix
+
+### v1.3 — Widget System, Theming & Dark Mode *(Aug 10–11, 2026)*
+
+- **Schema:** `supabase_schema_phase3.sql` — `users.app_background_preference`, `users.background_tint_preference`; `supabase_schema_phase4.sql` — RLS hardened on all 8 tables, `anon`/`authenticated` access to `public` schema revoked
+- Full widget system: `WidgetPicker` (2-step), `ReminderForm`/`FileForm`/`LinkForm`, display components; "Add" button in toolbar
+- Sidebar inline note lists (`SpaceNoteList`)
+- Per-space color theming (`lib/spaceColor.ts`); app background graphics (Plain/Dots/Grid/Diagonal/Rings/Glow); page tint
+- `lib/theme.ts` as single source of truth — `resolveTheme()` used on server + client identically; two caches: `ruang_theme_cache` (blocking pre-paint) + `ruang_prefs` (React)
+- Complete dark mode — opt-in only; `Logo.tsx` renders both cuts, CSS hides one via `data-theme`; no JS flash
+- `SECURITY_REVIEW.md` created; cross-tenant writes fixed; SSRF redirect bypass fixed; security headers added; `lib/ownership.ts` + `lib/ratelimit.ts` introduced
+
+### v1.4 — Mobile Hardening & Theme Persistence *(Aug 12–14, 2026)*
+
+- **Schema:** `supabase_schema_phase5.sql` — drops and recreates appearance `CHECK` constraints unconditionally (fixes stale constraint names from earlier migrations)
+- WhatsApp paste formatting fix
+- Mobile toolbar docked above keyboard: `lib/keyboardInset.ts` publishes `--kb-inset` via Visual Viewport API; `ToolbarButton` calls `preventDefault()` on `mousedown`; `.docked-toolbar-gap` reserves space
+- Theme persistence fix: `PreferencesProvider` no longer overwrites cached theme with defaults; rejected `PATCH /api/users` rolls back + surfaces `saveError`
+- Email verification via Resend on signup; pre-confirmed fallback if Resend is unavailable
+- Reversed logo in dark mode; `overscroll-behavior: none` on `html`/`body` + all inner scrollers
+
+### v1.5 — Schema & Shell Hardening *(Aug 18, 2026)*
+
+- **Schema:** `supabase_schema_phase6.sql` — pins `search_path` on all schema functions; revokes `EXECUTE` from `PUBLIC` (closes PostgREST RPC exposure for `SECURITY DEFINER` functions)
+- Shell scroll bug fixed (app canvas no longer scrolls the document)
+- "Add Widget" seated permanently in the formatting toolbar
+- Remaining half-dark artifacts neutralized
+- Appearance tab names the reason a save failed; drifted `CHECK` constraints rebuilt
+
+### v1.6 / Phase 7 — First-class To-dos *(Aug 18–24, 2026)*
+
+The largest single feature addition. A `todos` row, not a note.
+
+- **Schema:** `supabase_schema_phase7.sql` — `todos`, `todo_attachments`, indexes, RLS, seven `users.todo_*` preference columns; `supabase_schema_phase8.sql` — performance indexes for to-do query shapes; `supabase_schema_phase9.sql` — `users.color_scheme` + CHECK; `supabase_schema_phase10.sql` — `files.widget_id` made nullable
+- `/todo`: Today / Week / Month / All; list only (calendar stays at `/calendar`)
+- Quick add with typed date/duration parsing ("fri 3pm", "~20m")
+- **Drag and drop** — Pointer Events (works on touch); cross-date; keyboard (`Ctrl/Cmd + ↑/↓`); ghost card via `transform` on its own node, never React state
+- **Two-context architecture** — `useTodoActions()` (stable) + `useTodos()` (state); `TodoRow` is `React.memo`'d; no background refetch after mutations
+- Sub-tasks (one level; Independent/Dependent completion); recurrence (one row at a time); rollover (idempotent, defaults **off**)
+- **PeriodView** — open-ended Week/Month with bidirectional IntersectionObserver scroll; instant scroll correction on prepend; `scroll-behavior: smooth` removed from `globals.css`; scroller is `data-app-scroll`, not `window`
+- "Anytime" tray (undated work that is real but not owed to a day)
+- Focus mode with 25-minute timer; progress bar + streak
+- **Colour schemes** — 5 presets (Ruang Calm / Electric Indigo / Citrus / Emerald / Neon Dusk); stored in `users.color_scheme`; selecting a scheme also nulls `accent_color`
+- Sticky frosted-glass headers with scrollspy period title
+- `OverdueGroup` — carried-over items pinned above all groups in amber, never red ("carried over", not "overdue error")
+- Checklist-note migration: `POST /api/todos/migrate`; note preserved; `source_note_id` makes it re-runnable
+- One calendar at `/calendar`; `/todo` Calendar control is a link, not a toggle; `CalendarScreen` wraps `TodoProvider` + `TodoDragProvider`
+- Rollover defaulted to **off** (overdue items stay where they are)
+
+---
+
 ## Tech Stack
 
 | Layer | Tool | Notes |
