@@ -122,7 +122,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  if (Object.keys(updates).length === 0) return apiError('Nothing to update', 400);
+  if (Object.keys(updates).length === 0) {
+    // Nothing changed — DB already reflects the desired state. This is a normal
+    // race: the optimistic update on the client beat a previous write, so the
+    // second toggle saw no diff. Return the current row so the UI stays in sync
+    // rather than rolling back and showing a red error toast.
+    const { data: current } = await db
+      .from('todos')
+      .select(TODO_SELECT_LIGHT)
+      .eq('id', params.id)
+      .eq('user_id', userId!)
+      .maybeSingle();
+    if (!current) return apiError('Not found', 404);
+    return NextResponse.json(current);
+  }
 
   // A dependent parent's checkbox is gated by its sub-tasks. Enforced here as
   // well as in the UI: the button being disabled is a hint, not a rule.
