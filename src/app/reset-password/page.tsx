@@ -1,16 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useState, useEffect, useRef } from 'react';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-
-function supabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
+import { Logo } from '@/components/layout/Logo';
 
 type Step = 'loading' | 'form' | 'done' | 'invalid';
 
@@ -22,36 +15,62 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    /*
-     * Supabase puts the recovery tokens in the URL hash:
-     *   #access_token=xxx&refresh_token=xxx&type=recovery
-     *
-     * We set the session from those tokens so updateUser() works, then
-     * immediately show the password form. The session lives only in memory
-     * (persistSession: false) so it disappears when the page closes.
-     */
-    const hash = window.location.hash.slice(1);
-    const params = new URLSearchParams(hash);
-    const type = params.get('type');
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
+  // One client instance shared across setSession/exchangeCode and updateUser.
+  const clientRef = useRef<SupabaseClient | null>(null);
+  function getClient(): SupabaseClient {
+    if (!clientRef.current) {
+      clientRef.current = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+    }
+    return clientRef.current;
+  }
 
-    if (type !== 'recovery' || !accessToken || !refreshToken) {
-      setStep('invalid');
+  useEffect(() => {
+    const client = getClient();
+
+    // PKCE flow — Supabase puts a `code` in the query string.
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    if (code) {
+      client.auth
+        .exchangeCodeForSession(code)
+        .then(({ error }) => {
+          if (error) {
+            console.error('[reset-password] exchangeCodeForSession', error.message);
+            setStep('invalid');
+          } else {
+            setStep('form');
+          }
+        });
       return;
     }
 
-    supabase()
-      .auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      .then(({ error }) => {
-        if (error) {
-          console.error('[reset-password] setSession', error.message);
-          setStep('invalid');
-        } else {
-          setStep('form');
-        }
-      });
+    // Implicit / hash-token flow (older Supabase projects).
+    const hash = window.location.hash.slice(1);
+    const hashParams = new URLSearchParams(hash);
+    const type = hashParams.get('type');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+
+    if (type === 'recovery' && accessToken && refreshToken) {
+      client.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) {
+            console.error('[reset-password] setSession', error.message);
+            setStep('invalid');
+          } else {
+            setStep('form');
+          }
+        });
+      return;
+    }
+
+    setStep('invalid');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -68,7 +87,7 @@ export default function ResetPasswordPage() {
     }
 
     setSubmitting(true);
-    const { error } = await supabase().auth.updateUser({ password });
+    const { error } = await getClient().auth.updateUser({ password });
     setSubmitting(false);
 
     if (error) {
@@ -82,19 +101,16 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-bg-page flex items-center justify-center p-4">
       <div className="w-full max-w-[400px]">
-        <p
-          className="font-serif text-[28px] text-text-primary mb-1"
-          style={{ letterSpacing: '-0.025em' }}
-        >
-          ruang
-        </p>
+        <div className="mb-8">
+          <Logo />
+        </div>
 
         {step === 'loading' && (
-          <p className="text-[13.5px] text-text-secondary mt-6">Verifying your link…</p>
+          <p className="text-[13.5px] text-text-secondary">Verifying your link…</p>
         )}
 
         {step === 'invalid' && (
-          <div className="mt-6">
+          <div>
             <p className="text-[14px] text-text-primary font-medium mb-1">Link expired or invalid</p>
             <p className="text-[13px] text-text-secondary mb-5">
               This reset link has expired or already been used. Request a new one from the login
@@ -102,7 +118,7 @@ export default function ResetPasswordPage() {
             </p>
             <button
               onClick={() => router.push('/login')}
-              className="w-full h-11 rounded-[10px] bg-accent-blue text-white text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120"
+              className="w-full h-11 rounded-[10px] bg-accent-blue text-accent-ink text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120"
             >
               Back to sign in
             </button>
@@ -110,7 +126,7 @@ export default function ResetPasswordPage() {
         )}
 
         {step === 'form' && (
-          <form onSubmit={handleSubmit} className="mt-6 space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <p className="text-[14px] text-text-primary font-medium mb-4">Choose a new password</p>
 
             {error && (
@@ -140,7 +156,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full h-11 rounded-[10px] bg-accent-blue text-white text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120 disabled:opacity-60"
+              className="w-full h-11 rounded-[10px] bg-accent-blue text-accent-ink text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120 disabled:opacity-60"
             >
               {submitting ? 'Saving…' : 'Set new password'}
             </button>
@@ -148,14 +164,14 @@ export default function ResetPasswordPage() {
         )}
 
         {step === 'done' && (
-          <div className="mt-6">
+          <div>
             <p className="text-[14px] text-text-primary font-medium mb-1">Password updated</p>
             <p className="text-[13px] text-text-secondary mb-5">
               Your password has been changed. Sign in with your new password.
             </p>
             <button
               onClick={() => router.push('/login')}
-              className="w-full h-11 rounded-[10px] bg-accent-blue text-white text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120"
+              className="w-full h-11 rounded-[10px] bg-accent-blue text-accent-ink text-[13.5px] font-medium hover:bg-accent-blue-dark transition-colors duration-120"
             >
               Sign in
             </button>
