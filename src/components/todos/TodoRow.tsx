@@ -328,7 +328,7 @@ function SubtaskRow({ subtask, parentDueDate }: { subtask: Todo; parentDueDate?:
           type="button"
           onClick={() => setOpenTodoId(subtask.id)}
           title="Open to set deadline, reminder, etc."
-          className={`text-left text-12.5 hover:underline decoration-border-medium underline-offset-2 ${
+          className={`text-left text-12 hover:underline decoration-border-medium underline-offset-2 ${
             subtask.is_completed ? 'text-text-muted line-through' : 'text-text-primary'
           }`}
         >
