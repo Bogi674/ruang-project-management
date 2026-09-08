@@ -10,7 +10,8 @@ import { AutosaveState } from '@/types';
 
 const NAV_TABS = [
   { label: 'Home', href: '/home' },
-  // Second, ahead of Calendar: To-do is the screen this app is opened for
+  { label: 'Projects', href: '/projects' },
+  // Third, ahead of Calendar: To-do is the screen this app is opened for
   // daily, and the tab order is the order of that intent.
   { label: 'To-do', href: '/todo' },
   { label: 'Calendar', href: '/calendar' },
