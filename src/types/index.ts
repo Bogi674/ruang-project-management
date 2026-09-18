@@ -288,3 +288,50 @@ export interface CreateNotePayload {
   space_id?: string | null;
   initialWidgetType?: WidgetType;
 }
+
+/* ── Projects / PM (phase PM-1) ──────────────────────────────────────────── */
+
+export type ProjectStatus = 'todo' | 'in_progress' | 'on_hold' | 'completed';
+export type EntryType = 'note' | 'file' | 'task' | 'reminder' | 'link';
+export type EntryStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  status: ProjectStatus;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  updated_at: string;
+  workstream_count?: number;
+}
+
+export interface Workstream {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  position: number;
+  created_at: string;
+  entry_count?: number;
+}
+
+export interface ProjectEntry {
+  id: string;
+  project_id: string;
+  workstream_id?: string;
+  user_id: string;
+  type: EntryType;
+  title: string;
+  content?: Record<string, unknown>;
+  status?: EntryStatus;
+  pinned_date?: string;
+  pinned_date_end?: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
