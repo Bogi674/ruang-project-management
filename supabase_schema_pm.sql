@@ -1,8 +1,9 @@
 -- PM Phase 1 Schema
 -- Projects, Workstreams, Entries
+-- Idempotent: safe to re-run
 
 create table if not exists projects (
-  id          uuid        primary key default uuid_generate_v4(),
+  id          uuid        primary key default extensions.uuid_generate_v4(),
   user_id     uuid        not null references users(id) on delete cascade,
   name        text        not null,
   color       text        not null default '#A1B5D8',
@@ -17,7 +18,7 @@ create table if not exists projects (
 create index if not exists projects_user_id_idx on projects(user_id);
 
 create table if not exists workstreams (
-  id          uuid        primary key default uuid_generate_v4(),
+  id          uuid        primary key default extensions.uuid_generate_v4(),
   project_id  uuid        not null references projects(id) on delete cascade,
   user_id     uuid        not null references users(id) on delete cascade,
   name        text        not null,
@@ -29,7 +30,7 @@ create table if not exists workstreams (
 create index if not exists workstreams_project_id_idx on workstreams(project_id);
 
 create table if not exists project_entries (
-  id               uuid        primary key default uuid_generate_v4(),
+  id               uuid        primary key default extensions.uuid_generate_v4(),
   project_id       uuid        not null references projects(id) on delete cascade,
   workstream_id    uuid        references workstreams(id) on delete set null,
   user_id          uuid        not null references users(id) on delete cascade,
@@ -47,20 +48,26 @@ create table if not exists project_entries (
 create index if not exists project_entries_project_id_idx    on project_entries(project_id);
 create index if not exists project_entries_workstream_id_idx on project_entries(workstream_id);
 create index if not exists project_entries_user_id_idx       on project_entries(user_id);
+-- composite index for timeline and kanban queries that filter by type
+create index if not exists project_entries_type_idx          on project_entries(project_id, type);
 
 -- RLS
 alter table projects        enable row level security;
 alter table workstreams     enable row level security;
 alter table project_entries enable row level security;
 
--- All RLS policies (service role bypasses these; included for completeness)
-create policy if not exists "projects_owner" on projects
+-- RLS policies (service role bypasses these; included for completeness)
+-- PostgreSQL does not support CREATE POLICY IF NOT EXISTS — use DROP then CREATE
+drop policy if exists "projects_owner"       on projects;
+create policy "projects_owner" on projects
   for all using (user_id = auth.uid());
 
-create policy if not exists "workstreams_owner" on workstreams
+drop policy if exists "workstreams_owner"    on workstreams;
+create policy "workstreams_owner" on workstreams
   for all using (user_id = auth.uid());
 
-create policy if not exists "project_entries_owner" on project_entries
+drop policy if exists "project_entries_owner" on project_entries;
+create policy "project_entries_owner" on project_entries
   for all using (user_id = auth.uid());
 
 -- Updated_at trigger for projects
@@ -71,7 +78,11 @@ begin
   return new;
 end;
 $$;
+-- Supabase auto-grants EXECUTE to PUBLIC and to anon/authenticated on every new function.
+-- REVOKE FROM public removes the inherited grant; REVOKE FROM anon, authenticated removes
+-- any explicit grants those roles may have received.
 revoke execute on function update_projects_updated_at() from public;
+revoke execute on function update_projects_updated_at() from anon, authenticated;
 
 drop trigger if exists projects_updated_at on projects;
 create trigger projects_updated_at
@@ -87,6 +98,7 @@ begin
 end;
 $$;
 revoke execute on function update_project_entries_updated_at() from public;
+revoke execute on function update_project_entries_updated_at() from anon, authenticated;
 
 drop trigger if exists project_entries_updated_at on project_entries;
 create trigger project_entries_updated_at
