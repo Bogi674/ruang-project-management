@@ -54,13 +54,16 @@ alter table workstreams     enable row level security;
 alter table project_entries enable row level security;
 
 -- All RLS policies (service role bypasses these; included for completeness)
-create policy if not exists "projects_owner" on projects
+drop policy if exists "projects_owner" on projects;
+create policy "projects_owner" on projects
   for all using (user_id = auth.uid());
 
-create policy if not exists "workstreams_owner" on workstreams
+drop policy if exists "workstreams_owner" on workstreams;
+create policy "workstreams_owner" on workstreams
   for all using (user_id = auth.uid());
 
-create policy if not exists "project_entries_owner" on project_entries
+drop policy if exists "project_entries_owner" on project_entries;
+create policy "project_entries_owner" on project_entries
   for all using (user_id = auth.uid());
 
 -- Updated_at trigger for projects
