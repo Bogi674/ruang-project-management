@@ -74,7 +74,9 @@ begin
   return new;
 end;
 $$;
+-- Supabase auto-grants anon+authenticated on new functions; revoke all three.
 revoke execute on function update_projects_updated_at() from public;
+revoke execute on function update_projects_updated_at() from anon, authenticated;
 
 drop trigger if exists projects_updated_at on projects;
 create trigger projects_updated_at
@@ -90,8 +92,13 @@ begin
 end;
 $$;
 revoke execute on function update_project_entries_updated_at() from public;
+revoke execute on function update_project_entries_updated_at() from anon, authenticated;
 
 drop trigger if exists project_entries_updated_at on project_entries;
 create trigger project_entries_updated_at
   before update on project_entries
   for each row execute function update_project_entries_updated_at();
+
+-- Index for Phase 2 Timeline (type-filtered queries) and Phase 3 Kanban (tasks only)
+create index if not exists project_entries_type_idx
+  on project_entries(project_id, type);
