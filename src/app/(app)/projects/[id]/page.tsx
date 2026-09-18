@@ -8,6 +8,8 @@ import { WorkstreamSidebar } from '@/components/projects/WorkstreamSidebar';
 import { EntryRow } from '@/components/projects/EntryRow';
 import { AddEntryModal } from '@/components/projects/AddEntryModal';
 import { ProjectModal } from '@/components/projects/ProjectModal';
+import { ProjectTimeline } from '@/components/projects/ProjectTimeline';
+import { EntryDetailPanel } from '@/components/projects/EntryDetailPanel';
 
 interface ProjectDetail extends Project {
   workstreams: Workstream[];
@@ -22,6 +24,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading]       = useState(true);
   const [activeWs, setActiveWs]     = useState<string | null>(null);
   const [view, setView]             = useState<'list' | 'timeline' | 'kanban'>('list');
+  const [selectedEntry, setSelectedEntry] = useState<ProjectEntry | null>(null);
   const [showAddEntry, setAddEntry] = useState(false);
   const [showEdit, setShowEdit]     = useState(false);
   const [showAddWs, setShowAddWs]   = useState(false);
@@ -51,6 +54,21 @@ export default function ProjectDetailPage() {
   async function handleDeleteEntry(entryId: string) {
     await fetch(`/api/projects/${id}/entries/${entryId}`, { method: 'DELETE' });
     setProject((prev) => prev ? { ...prev, entries: prev.entries.filter((e) => e.id !== entryId) } : prev);
+  }
+
+  async function handleUpdateEntry(entryId: string, data: Partial<ProjectEntry>) {
+    const res = await fetch(`/api/projects/${id}/entries/${entryId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed');
+    const updated = await res.json();
+    setProject((prev) => prev ? {
+      ...prev,
+      entries: prev.entries.map((e) => e.id === entryId ? { ...e, ...updated } : e),
+    } : prev);
+    if (selectedEntry?.id === entryId) setSelectedEntry((prev) => prev ? { ...prev, ...updated } : prev);
   }
 
   async function handleUpdateProject(data: Partial<Project>) {
@@ -125,67 +143,78 @@ export default function ProjectDetailPage() {
       />
 
       {/* Body */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Workstream sidebar */}
-        <WorkstreamSidebar
-          workstreams={project.workstreams}
-          entries={project.entries}
-          activeId={activeWs}
-          onSelect={setActiveWs}
-          onAddWorkstream={() => setShowAddWs(true)}
+      {view === 'timeline' ? (
+        <ProjectTimeline
+          project={project}
+          onEntryClick={setSelectedEntry}
+          onEntryUpdate={handleUpdateEntry}
         />
+      ) : (
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Workstream sidebar */}
+          <WorkstreamSidebar
+            workstreams={project.workstreams}
+            entries={project.entries}
+            activeId={activeWs}
+            onSelect={setActiveWs}
+            onAddWorkstream={() => setShowAddWs(true)}
+          />
 
-        {/* Main content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 0' }}>
-          {/* Edit project link */}
-          <div style={{ padding: '0 24px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => setShowEdit(true)}
-              style={{ fontSize: 12.5, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              Edit project
-            </button>
-          </div>
-
-          {view !== 'list' && (
-            <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-                {view === 'timeline' ? 'Timeline view' : 'Kanban view'} coming soon.
-              </p>
-              <p style={{ fontSize: 13, color: 'var(--text-faint)' }}>Switch to List view to manage entries.</p>
-            </div>
-          )}
-
-          {view === 'list' && grouped.length === 0 && (
-            <div style={{ padding: '60px 24px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>No entries yet.</p>
+          {/* Main content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 0' }}>
+            {/* Edit project link */}
+            <div style={{ padding: '0 24px 16px', display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                onClick={() => setAddEntry(true)}
-                style={{ fontSize: 13.5, color: 'var(--accent-blue-dark)', background: 'none', border: 'none', cursor: 'pointer' }}
+                onClick={() => setShowEdit(true)}
+                style={{ fontSize: 12.5, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                + Add the first entry
+                Edit project
               </button>
             </div>
-          )}
 
-          {view === 'list' && grouped.map(({ ws, entries }, i) => (
-            <div key={ws?.id ?? 'unassigned'} style={{ marginBottom: 8 }}>
-              {/* Group header */}
-              <div style={{ padding: '8px 16px 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {ws && <span style={{ width: 3, height: 14, borderRadius: 2, background: ws.color }} />}
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                  {ws ? ws.name : 'No workstream'}
-                </span>
+            {view === 'kanban' && (
+              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Kanban view coming soon.</p>
+                <p style={{ fontSize: 13, color: 'var(--text-faint)' }}>Switch to List view to manage entries.</p>
               </div>
+            )}
 
-              {/* Entry rows */}
-              {entries.map((entry) => (
-                <EntryRow key={entry.id} entry={entry} onDelete={handleDeleteEntry} />
-              ))}
-            </div>
-          ))}
+            {view === 'list' && grouped.length === 0 && (
+              <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>No entries yet.</p>
+                <button
+                  onClick={() => setAddEntry(true)}
+                  style={{ fontSize: 13.5, color: 'var(--accent-blue-dark)', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  + Add the first entry
+                </button>
+              </div>
+            )}
+
+            {view === 'list' && grouped.map(({ ws, entries }) => (
+              <div key={ws?.id ?? 'unassigned'} style={{ marginBottom: 8 }}>
+                {/* Group header */}
+                <div style={{ padding: '8px 16px 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {ws && <span style={{ width: 3, height: 14, borderRadius: 2, background: ws.color }} />}
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                    {ws ? ws.name : 'No workstream'}
+                  </span>
+                </div>
+
+                {/* Entry rows */}
+                {entries.map((entry) => (
+                  <EntryRow
+                    key={entry.id}
+                    entry={entry}
+                    onDelete={handleDeleteEntry}
+                    onClick={() => setSelectedEntry(entry)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Add workstream inline form */}
       {showAddWs && (
@@ -236,6 +265,18 @@ export default function ProjectDetailPage() {
           project={project}
           onSave={handleUpdateProject}
           onClose={() => setShowEdit(false)}
+        />
+      )}
+
+      {selectedEntry && (
+        <EntryDetailPanel
+          entry={selectedEntry}
+          project={project}
+          workstream={project.workstreams.find((w) => w.id === selectedEntry.workstream_id)}
+          onClose={() => setSelectedEntry(null)}
+          onUpdate={handleUpdateEntry}
+          onDelete={(entryId) => { handleDeleteEntry(entryId); setSelectedEntry(null); }}
+          backLabel={view === 'timeline' ? 'Back to Timeline' : 'Back to List'}
         />
       )}
     </div>
